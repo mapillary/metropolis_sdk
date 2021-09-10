@@ -1,0 +1,6 @@
+matplotlib
+numpy
+pillow
+pyquaternion
+iopath
+scikit-image
