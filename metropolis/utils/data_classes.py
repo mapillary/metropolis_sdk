@@ -17,7 +17,7 @@ from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:m
 from pyquaternion import Quaternion
 
 from . import pathmgr
-from .geometry_utils import view_points, transform_matrix
+from .geometry_utils import view_points, view_points_eq, transform_matrix
 
 if TYPE_CHECKING:
     from ..metropolis import Metropolis
@@ -420,7 +420,6 @@ class Box:
         """
         self.center = np.dot(quaternion.rotation_matrix, self.center)
         self.orientation = quaternion * self.orientation
-        self.velocity = np.dot(quaternion.rotation_matrix, self.velocity)
 
     def corners(self, wlh_factor: float = 1.0) -> np.ndarray:
         """Returns the bounding box corners.
@@ -464,7 +463,7 @@ class Box:
         axis: Axes,
         view: np.ndarray = EYE3,
         normalize: bool = False,
-        colors: Tuple = ("b", "r", "k"),
+        colors: Tuple[Any, Any, Any] = ("b", "r", "k"),
         linewidth: float = 2,
     ) -> None:
         """Renders the box in the provided Matplotlib axis.
@@ -512,6 +511,43 @@ class Box:
             color=colors[0],
             linewidth=linewidth,
         )
+
+    def render_eq(
+        self,
+        axis: Axes,
+        img_size: Tuple[int, int],
+        colors: Tuple[Any, Any, Any] = ("b", "r", "k"),
+        linewidth: float = 2,
+        num_samples: int = 20,
+    ) -> None:
+        """Renders the box in the provided Matplotlib axis, using an equirectangular
+        projection.
+
+        Args:
+            axis: Axis onto which the box should be drawn.
+            img_size: Image size as (width, height).
+            colors: Valid Matplotlib colors (<str> or normalized RGB tuple) for front,
+                back and sides.
+            linewidth: Width in pixel of the box sides.
+            num_samples: Number of points to sample on each edge of the bounding box
+        """
+        t = np.linspace(0, 1, num_samples).reshape(1, -1)
+        corners = self.corners()
+
+        def draw_line(p1, p2, color):
+            line = p1.reshape(3, -1) + t * (p2 - p1).reshape(3, -1)
+            line = view_points_eq(line, img_size[0], img_size[1])
+            axis.plot(line[0, :], line[1, :], color=color, linewidth=linewidth)
+
+        # Draw the sides
+        for i in range(4):
+            draw_line(corners[:, i], corners[:, i + 4], colors[2])
+
+        # Draw front and back
+        for i in range(4):
+            draw_line(corners[:, i % 4], corners[:, (i + 1) % 4], colors[0])
+        for i in range(4):
+            draw_line(corners[:, i % 4 + 4], corners[:, (i + 1) % 4 + 4], colors[1])
 
     def copy(self) -> "Box":
         """Create a copy of self.

@@ -260,18 +260,41 @@ class Metropolis:
             record["bounding_box"], name=record["category_name"], token=record["token"]
         )
 
-    def get_boxes(self, sample_data_token: str) -> List[Box]:
+    def get_boxes(
+        self, sample_data_token: str, get_all_visible: bool = False
+    ) -> List[Box]:
         """Instantiates Boxes for all annotation for a particular sample_data record
 
         Args:
             sample_data_token: Unique sample_data identifier.
+            get_all_visible: If true, retrieve annotations for all objects that are
+                potentially visible from this sample_data (i.e. those that have a
+                2D annotation in the corresponding 360 image). Otherwise, only
+                return objects that have been annotated in 3D directly on this sample.
 
         Return:
             A list of boxes.
         """
         sd_record = self.get("sample_data", sample_data_token)
         curr_sample_record = self.get("sample", sd_record["sample_token"])
-        return list(map(self.get_box, curr_sample_record["anns"]))
+
+        if get_all_visible:
+            instance_tokens = {
+                self.get("sample_annotation_2d", sa_2d_token)["instance_token"]
+                for sa_2d_token in curr_sample_record["anns_2d"]
+            }
+            return list(
+                map(
+                    self.get_box,
+                    (
+                        sa["token"]
+                        for sa in self.sample_annotation
+                        if sa["instance_token"] in instance_tokens
+                    ),
+                )
+            )
+        else:
+            return list(map(self.get_box, curr_sample_record["anns"]))
 
     def get_boxes_2d(self, sample_data_token: str) -> List[Box2d]:
         """Instantiates 2D Boxes for all annotation for a particular sample_data record
@@ -308,6 +331,7 @@ class Metropolis:
         selected_anntokens: Optional[List[str]] = None,
         selected_2d_anntokens: Optional[List[str]] = None,
         use_flat_vehicle_coordinates: bool = False,
+        get_all_visible_boxes: bool = False,
     ) -> Tuple[
         str,
         List[Box],
@@ -324,6 +348,10 @@ class Metropolis:
             selected_2d_anntokens: If provided only return the selected 2D annotation.
             use_flat_vehicle_coordinates: Instead of the current sensor's coordinate
                 frame, use ego frame which is aligned to z-plane in the world.
+            get_all_visible_boxes: If true, retrieve 3D boxes for all objects that are
+                potentially visible from this sample_data (i.e. those that have a
+                2D annotation in the corresponding 360 image). Otherwise, only
+                return boxes that have been annotated in 3D directly on this sample.
 
         Returns:
             data_path: Path to the data file.
@@ -353,7 +381,7 @@ class Metropolis:
         if selected_anntokens is not None:
             boxes = list(map(self.get_box, selected_anntokens))
         else:
-            boxes = self.get_boxes(sample_data_token)
+            boxes = self.get_boxes(sample_data_token, get_all_visible_boxes)
 
         # Make list of Box objects including coord system transforms.
         box_list = []
@@ -582,6 +610,7 @@ class Metropolis:
         out_path: Optional[str] = None,
         use_flat_vehicle_coordinates: bool = True,
         show_3d_boxes: bool = False,
+        show_all_visible_3d_boxes: bool = False,
         verbose: bool = False,
     ) -> None:
         """Render sample data onto axis.
@@ -594,8 +623,12 @@ class Metropolis:
             out_path: Optional path to save the rendered figure to disk.
             use_flat_vehicle_coordinates: Instead of the current sensor's coordinate
                 frame, use ego frame which is aligned to z-plane in the world.
-            show_2d_boxes: When rendering images, the default is to show 2D boxes.
+            show_3d_boxes: When rendering images, the default is to show 2D boxes.
                 If this is set to True, show 3D boxes instead.
+            show_all_visible_3d_boxes: If true, when rendering 3D boxes we show all
+                those that are potentially visible from this sample_data (i.e. those
+                that have a 2D annotation in the corresponding 360 image). Otherwise,
+                we only show those that have been annotated directly on this sample.
             verbose: Whether to display the image after it is rendered.
         """
         # Get sensor modality.
@@ -661,6 +694,7 @@ class Metropolis:
             _, boxes, _, _ = self.get_sample_data(
                 ref_sd_token,
                 use_flat_vehicle_coordinates=use_flat_vehicle_coordinates,
+                get_all_visible_boxes=show_all_visible_3d_boxes,
             )
 
             # Show boxes.
@@ -674,9 +708,12 @@ class Metropolis:
         elif sensor_modality == "camera":
             # Load boxes and image.
             data_path, boxes, boxes_2d, camera_intrinsic = self.get_sample_data(
-                sample_data_token
+                sample_data_token,
+                get_all_visible_boxes=show_all_visible_3d_boxes,
             )
-            data = Image.open(data_path)
+            with pathmgr.open(data_path, "rb") as fid:
+                data = Image.open(fid)
+                data.load()
 
             # Init axes.
             if ax is None:
@@ -689,9 +726,12 @@ class Metropolis:
             if show_3d_boxes:
                 for box in boxes:
                     c = np.array(self.get_color(box.name)) / 255.0
-                    box.render(
-                        ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)
-                    )
+                    if sd_record["channel"] == "CAM_EQUIRECTANGULAR":
+                        box.render_eq(ax, data.size, colors=(c, c, c))
+                    else:
+                        box.render(
+                            ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)
+                        )
             else:
                 for box in boxes_2d:
                     c = np.array(self.get_color(box.name)) / 255.0

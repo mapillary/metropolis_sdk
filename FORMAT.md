@@ -200,7 +200,11 @@ time and space. These are grouped into sequential "scenes" (see `scene.json`).
 
 ### sample_annotation.json
 3D object annotations, defined as 3D bounding boxes in the world. Rotation and
-translation transform from the object frame to the world frame.
+translation transform from the object frame to the world frame. Note that the
+`sample_token` field points to the sample where this 3D object was annotated, but
+the same object could also be visible from other samples. In the SDK, one can
+easily retrieve all 3D boxes that are potentially visible from a certain sample
+with `Metropolis.get_boxes(..., get_all_visible=True)`.
 ```python
 {
     "token": str,
