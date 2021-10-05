@@ -36,7 +36,7 @@ The entry point to the SDK is the [Metropolis](metropolis/metropolis.py#L49) cla
 ```python
 from metropolis import Metropolis
 metropolis = Metropolis(
-    "train", # Nome of the split we want to load
+    "train", # Name of the split we want to load
     "/home/user/metropolis_data", # Path to the root directory of the dataset
 )
 ```
