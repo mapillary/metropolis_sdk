@@ -5,7 +5,7 @@
 # Code written by Oscar Beijbom and Alex Lang, 2018.
 
 from enum import IntEnum
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING, List
 
 import numpy as np
 from pyquaternion import Quaternion
@@ -242,3 +242,77 @@ def points_in_box(
     mask = np.logical_and(np.logical_and(mask_x, mask_y), mask_z)
 
     return mask
+
+
+def split_poly_eq(poly: np.ndarray, width: int) -> List[np.ndarray]:
+    """Split a polygon into multiple segments to render it properly on an eq image
+
+    When projecting lines (e.g. 3D bounding box edges) to an equirectangular image,
+    we obtain curves that can cross over from the right to the left edge of the
+    image (or vice vers), potentially multiple times. Plotting these naively produces
+    large artifacts. To avoid this, this function splits the projection (given as
+    a polygon) into multiple segments which, when plotted independently, produce
+    the correct visualization.
+
+    Args:
+        poly: A polygon, i.e. a sequence of 2D points given as a 2 x N array.
+        width: Width of the equirectangular image in pixels.
+
+    Returns:
+        A list of polygon segments to be plotted separately.
+    """
+    segments = []
+    curr_segment = []
+
+    for i in range(0, poly.shape[1] - 1):
+        x1 = poly[0, i]
+        x2 = poly[0, i + 1]
+
+        y1 = poly[1, i]
+        y2 = poly[1, i + 1]
+
+        if x2 > x1:
+            d_dir = x2 - x1
+            d_crs = x1 + width - x2
+
+            if d_crs < d_dir:
+                # Crossing is better, we need to split
+                y_interp = (width - x2) * (y1 - y2) / (x1 + width - x2) + y2
+
+                # Finish the current segment
+                curr_segment.append((x1, y1))
+                curr_segment.append((0, y_interp))
+                segments.append(curr_segment)
+
+                # Start a new one
+                curr_segment = [(width, y_interp)]
+            else:
+                # No need to split
+                curr_segment.append((x1, y1))
+        elif x1 > x2:
+            d_dir = x1 - x2
+            d_crs = x2 + width - x1
+
+            if d_crs < d_dir:
+                # Crossing is better, we need to split
+                y_interp = (width - x1) * (y2 - y1) / (x2 + width - x1) + y1
+
+                # Finish the current segment
+                curr_segment.append((x1, y1))
+                curr_segment.append((width, y_interp))
+                segments.append(curr_segment)
+
+                # Start a new one
+                curr_segment = [(0, y_interp)]
+            else:
+                # No need to split
+                curr_segment.append((x1, y1))
+        else:
+            # No need to split
+            curr_segment.append((x1, y1))
+
+    curr_segment.append((poly[0, -1], poly[1, -1]))
+    segments.append(curr_segment)
+
+    # TODO: covert segments to numpy
+    return [np.array(segment).T for segment in segments]

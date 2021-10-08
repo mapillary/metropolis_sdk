@@ -404,8 +404,12 @@ class Metropolis:
                 box.translate(-np.array(cs_record["translation"]))
                 box.rotate(Quaternion(cs_record["rotation"]).inverse)
 
-            if sensor_record["modality"] == "camera" and not box_in_image(
-                box, cam_intrinsic, imsize
+            # For perspective cameras, filter out boxes that would project outside
+            # of the image
+            if (
+                sensor_record["modality"] == "camera"
+                and sensor_record["channel"] != "CAM_EQUIRECTANGULAR"
+                and not box_in_image(box, cam_intrinsic, imsize)
             ):
                 continue
 

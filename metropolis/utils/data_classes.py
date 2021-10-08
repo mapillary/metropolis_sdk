@@ -17,7 +17,7 @@ from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:m
 from pyquaternion import Quaternion
 
 from . import pathmgr
-from .geometry_utils import view_points, view_points_eq, transform_matrix
+from .geometry_utils import view_points, view_points_eq, transform_matrix, split_poly_eq
 
 if TYPE_CHECKING:
     from ..metropolis import Metropolis
@@ -537,7 +537,9 @@ class Box:
         def draw_line(p1, p2, color):
             line = p1.reshape(3, -1) + t * (p2 - p1).reshape(3, -1)
             line = view_points_eq(line, img_size[0], img_size[1])
-            axis.plot(line[0, :], line[1, :], color=color, linewidth=linewidth)
+
+            for line in split_poly_eq(line, img_size[0]):
+                axis.plot(line[0, :], line[1, :], color=color, linewidth=linewidth)
 
         # Draw the sides
         for i in range(4):

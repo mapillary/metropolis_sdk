@@ -210,7 +210,7 @@ with `Metropolis.get_boxes(..., get_all_visible=True)`.
     "token": str,
     "rotation": List[float],    # Rotation quaternion [q_w, q_x, q_y, q_z]
     "translation": List[float], # Translation vector [t_x, t_y, t_z]
-    "size": List[float],        # Bounding box size [w, l, h]
+    "size": List[float],        # Bounding box size [w, l, h], i.e. its extent along the Y, X and Z axes, respectively
     "instance_token": str,      # Foreign key to the instance this annotation belongs to
     "sample_token": str,        # Foreign key to the sample where this object is annotated
 }
