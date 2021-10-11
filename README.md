@@ -74,7 +74,7 @@ or render a point cloud onto an image with:
 ```python
 metropolis.render_pointcloud_in_image(
     "{sample_token}",
-    pointsensor_channel="MVS_PANO",
+    pointsensor_channel="MVS",
     camera_channel="CAM_EQUIRECTANGULAR",
     out_path="/path/to/output/image.png",
 )

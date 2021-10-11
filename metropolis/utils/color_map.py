@@ -1,5 +1,7 @@
 from typing import Dict, Tuple
 
+import matplotlib.pyplot as plt
+
 
 def get_colormap() -> Dict[str, Tuple[int, int, int]]:
     """Get the defined colormap.
@@ -100,3 +102,16 @@ def get_colormap() -> Dict[str, Tuple[int, int, int]]:
     }
 
     return classname_to_color
+
+
+def plot_deph_normalized_colormap(depth_map, scale_range):
+    # depth=0 is the area with no depth data, will be colorized as far away background
+    depth_map[depth_map <= 0] = 255
+    # the color map wil be spread within 0 - scale_range
+    depth_map[depth_map > scale_range] = scale_range
+    depth_map = depth_map / scale_range
+    cmap = plt.cm.jet_r
+    rgba = cmap(depth_map)
+    rgb = rgba[:, :, 0:3] * 255.0
+
+    return rgb

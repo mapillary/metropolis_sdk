@@ -21,7 +21,7 @@ from skimage.segmentation import find_boundaries
 from skimage.transform import warp
 
 from .utils import pathmgr
-from .utils.color_map import get_colormap
+from .utils.color_map import get_colormap, plot_deph_normalized_colormap
 from .utils.data_classes import LidarPointCloud, Box, Box2d, EquiBox2d
 from .utils.geometry_utils import (
     view_points,
@@ -366,9 +366,17 @@ class Metropolis:
         sensor_record = self.get("sensor", cs_record["sensor_token"])
         pose_record = self.get("ego_pose", sd_record["ego_pose_token"])
 
+        is_camera_like = (
+            sensor_record["modality"] == "depth"
+            or sensor_record["modality"] == "camera"
+        )
+
         data_path = self.get_sample_data_path(sample_data_token)
 
-        if sensor_record["modality"] == "camera":
+        if (
+            sensor_record["modality"] == "camera"
+            or sensor_record["modality"] == "depth"
+        ):
             cam_intrinsic = np.array(cs_record["camera_intrinsic"])
             imsize = (sd_record["width"], sd_record["height"])
         else:
@@ -404,21 +412,17 @@ class Metropolis:
                 box.translate(-np.array(cs_record["translation"]))
                 box.rotate(Quaternion(cs_record["rotation"]).inverse)
 
-            # For perspective cameras, filter out boxes that would project outside
-            # of the image
-            if (
-                sensor_record["modality"] == "camera"
-                and sensor_record["channel"] != "CAM_EQUIRECTANGULAR"
-                and not box_in_image(box, cam_intrinsic, imsize)
-            ):
-                continue
+            # For perspective camera-like sensors, check if the box is visible
+            if is_camera_like and sensor_record["channel"] != "CAM_EQUIRECTANGULAR":
+                if not box_in_image(box, cam_intrinsic, imsize):
+                    continue
 
             box_list.append(box)
 
         #### 2D Annotations, only for cameras ####
         box_2d_list = None
 
-        if sensor_record["modality"] == "camera":
+        if is_camera_like:
             if selected_2d_anntokens is not None:
                 boxes_2d = list(map(self.get_box_2d, selected_2d_anntokens))
             else:
@@ -461,7 +465,7 @@ class Metropolis:
         sample_token: str,
         dot_size: int = 0.5,
         downsample: int = 20,
-        pointsensor_channel: str = "MVS_PANO",
+        pointsensor_channel: str = "MVS",
         camera_channel: str = "CAM_FRONT",
         out_path: Optional[str] = None,
         ax: Optional[Axes] = None,
@@ -473,7 +477,7 @@ class Metropolis:
             sample_token: Sample token.
             dot_size: Scatter plot dot size.
             downsample: Downsampling factor.
-            pointsensor_channel: LIDAR channel name, e.g. 'MVS_PANO'.
+            pointsensor_channel: Pointcloud channel name, e.g. 'MVS'.
             camera_channel: Camera channel name, e.g. 'CAM_FRONT'.
             out_path: Optional path to save the rendered figure to disk.
             ax: Optional existing matplotlib axes object to draw on.
@@ -637,12 +641,16 @@ class Metropolis:
         """
         # Get sensor modality.
         sd_record = self.get("sample_data", sample_data_token)
+
+        if not sd_record["has_3d"]:
+            raise ValueError("Error: no 3D data available!")
+
         sensor_modality = sd_record["sensor_modality"]
 
-        if sensor_modality == "lidar":
+        if sensor_modality == "lidar" or sensor_modality == "mvs":
             sample_rec = self.get("sample", sd_record["sample_token"])
             chan = sd_record["channel"]
-            ref_chan = "MVS_PANO"
+            ref_chan = "MVS"
             ref_sd_token = sample_rec["data"][ref_chan]
             ref_sd_record = self.get("sample_data", ref_sd_token)
 
@@ -709,7 +717,7 @@ class Metropolis:
             # Limit visible range.
             ax.set_xlim(-axes_limit, axes_limit)
             ax.set_ylim(-axes_limit, axes_limit)
-        elif sensor_modality == "camera":
+        elif sensor_modality == "camera" or sensor_modality == "depth":
             # Load boxes and image.
             data_path, boxes, boxes_2d, camera_intrinsic = self.get_sample_data(
                 sample_data_token,
@@ -718,6 +726,13 @@ class Metropolis:
             with pathmgr.open(data_path, "rb") as fid:
                 data = Image.open(fid)
                 data.load()
+
+            # depthmaps are stored in 16 bit pngs, so it needs to be converted in meters
+            if sensor_modality == "depth":
+                data = np.array(data, dtype=np.float32) / 256.0
+                max_depth_color = 120.0
+                depth_map_color = plot_deph_normalized_colormap(data, max_depth_color)
+                data = Image.fromarray(depth_map_color.astype(np.uint8))
 
             # Init axes.
             if ax is None:
@@ -796,11 +811,11 @@ class Metropolis:
         # Get the point cloud
         sample_rec = self.get("sample", sd_record["sample_token"])
         pc, _ = LidarPointCloud.from_file_multisweep(
-            self, sample_rec, sd_record["channel"], "MVS_PANO", nsweeps=nsweeps
+            self, sample_rec, sd_record["channel"], "MVS", nsweeps=nsweeps
         )
 
         # Transform to global coordinates
-        ref_sd_record = self.get("sample_data", sample_rec["data"]["MVS_PANO"])
+        ref_sd_record = self.get("sample_data", sample_rec["data"]["MVS"])
         cs_record = self.get(
             "calibrated_sensor", ref_sd_record["calibrated_sensor_token"]
         )

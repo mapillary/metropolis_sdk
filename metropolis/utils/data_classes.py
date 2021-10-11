@@ -21,6 +21,7 @@ from .geometry_utils import view_points, view_points_eq, transform_matrix, split
 
 if TYPE_CHECKING:
     from ..metropolis import Metropolis
+from io import BytesIO
 
 EYE3 = np.eye(3)
 EYE4 = np.eye(4)
@@ -172,10 +173,12 @@ class PointCloud(ABC):
             all_pc.points = np.hstack((all_pc.points, current_pc.points))
 
             # Abort if there are no previous sweeps.
-            if current_sd_rec["prev"] == "":
+            if current_sd_rec["previous_sample_data"] == "":
                 break
             else:
-                current_sd_rec = metr.get("sample_data", current_sd_rec["prev"])
+                current_sd_rec = metr.get(
+                    "sample_data", current_sd_rec["previous_sample_data"]
+                )
 
         return all_pc, all_times
 
@@ -326,12 +329,16 @@ class LidarPointCloud(PointCloud):
             LidarPointCloud instance (x, y, z, intensity).
         """
 
-        assert file_name.endswith(".bin"), f"Unsupported filetype {file_name}"
+        assert file_name.endswith(".npz"), f"Unsupported filetype {file_name}"
 
         with pathmgr.open(file_name, "rb") as fid:
-            scan = np.frombuffer(fid.read(), dtype=np.float32)
-        points = scan.reshape((-1, 5))[:, : cls.nbr_dims()]
-        return cls(points.T)
+            data = np.load(fid)
+            points = data["points"]
+
+        points4 = np.ones((points.shape[0], 4))
+        points4[:, :3] = points
+
+        return cls(points4.T)
 
 
 class Box:
