@@ -23,6 +23,7 @@ from skimage.transform import warp
 from .utils import pathmgr
 from .utils.color_map import get_colormap, plot_deph_normalized_colormap
 from .utils.data_classes import LidarPointCloud, Box, Box2d, EquiBox2d
+from .utils.geo import TopocentricConverter
 from .utils.geometry_utils import (
     view_points,
     view_points_eq,
@@ -93,7 +94,7 @@ class Metropolis:
         self.sample_data = self.__load_table__("sample_data")
         self.sample_annotation = self.__load_table__("sample_annotation")
         self.sample_annotation_2d = self.__load_table__("sample_annotation_2d")
-        self.aerial = self.__load_table__("aerial")
+        self.geo = self.__load_table__("geo")
 
         # Initialize the colormap which maps from class names to RGB values.
         self.colormap = get_colormap()
@@ -805,13 +806,20 @@ class Metropolis:
         sensor_modality = sd_record["sensor_modality"]
 
         assert (
-            sensor_modality == "lidar"
+            sensor_modality == "lidar" or sensor_modality == "mvs"
         ), "This function is only available for pointclouds"
 
         # Get the point cloud
         sample_rec = self.get("sample", sd_record["sample_token"])
         pc, _ = LidarPointCloud.from_file_multisweep(
             self, sample_rec, sd_record["channel"], "MVS", nsweeps=nsweeps
+        )
+
+        # Create coordinates converter
+        converter = TopocentricConverter(
+            self.geo["reference"]["lat"],
+            self.geo["reference"]["lon"],
+            self.geo["reference"]["alt"],
         )
 
         # Transform to global coordinates
@@ -832,23 +840,30 @@ class Metropolis:
         sens_to_world = np.dot(ego_to_world, sens_to_ego)
         pc.transform(sens_to_world)
 
-        # Get center in geo-referenced coordinates
-        x_off, y_off = self.aerial["offset"]
-        x_global, y_global = pose_record["translation"][:2]
-        x_geo, y_geo = x_global + x_off, y_global + y_off
+        # Get center and view area corners in geo-referenced coordinates
+        y_c_lla, x_c_lla, _ = converter.to_lla(
+            pose_record["translation"][0],
+            pose_record["translation"][1],
+            pose_record["translation"][2],
+        )
+        y0_lla, x0_lla, _ = converter.to_lla(
+            pose_record["translation"][0] - axes_limit,
+            pose_record["translation"][1] - axes_limit,
+            pose_record["translation"][2],
+        )
+        y1_lla, x1_lla, _ = converter.to_lla(
+            pose_record["translation"][0] + axes_limit,
+            pose_record["translation"][1] + axes_limit,
+            pose_record["translation"][2],
+        )
 
         # Take a crop of the aerial data
         crop = gdal.Warp(
             "",
-            path.join(self.dataroot, self.aerial["filename"]),
-            dstSRS=self.aerial["srs"],
+            path.join(self.dataroot, self.geo["aerial"]["filename"]),
+            dstSRS="WGS84",
             format="VRT",
-            outputBounds=(
-                x_geo - axes_limit,
-                y_geo - axes_limit,
-                x_geo + axes_limit,
-                y_geo + axes_limit,
-            ),
+            outputBounds=(x0_lla, y0_lla, x1_lla, y1_lla),
         )
         img = np.stack(
             [crop.GetRasterBand(i + 1).ReadAsArray() for i in range(3)], axis=-1
@@ -863,20 +878,31 @@ class Metropolis:
         ax.imshow(img)
 
         # Project the point cloud to image coordinates
+        y_p_lla, x_p_lla, _ = converter.to_lla(
+            pc.points[0, :], pc.points[1, :], pc.points[2, :]
+        )
+
         gt = crop.GetGeoTransform()
         R = np.array([[gt[1], gt[2]], [gt[4], gt[5]]])
         t = np.array([[gt[0]], [gt[3]]])
-        points = np.linalg.solve(R, pc.points[:2, :] + np.array([[x_off], [y_off]]) - t)
+        points = np.linalg.solve(R, np.vstack([x_p_lla, y_p_lla]) - t)
 
         # Draw the points
         dists = np.sqrt(
-            np.sum((pc.points[:2, :] - np.array([[x_global], [y_global]])) ** 2, axis=0)
+            np.sum(
+                (
+                    pc.points[:2, :]
+                    - np.array(pose_record["translation"][:2]).reshape(2, 1)
+                )
+                ** 2,
+                axis=0,
+            )
         )
         colors = np.minimum(1, dists / axes_limit / np.sqrt(2))
         ax.scatter(points[0, :], points[1, :], c=colors, s=0.2)
 
         # Show ego vehicle
-        ev_pos = np.linalg.solve(R, np.array([[x_geo], [y_geo]]) - t)
+        ev_pos = np.linalg.solve(R, np.array([[x_c_lla], [y_c_lla]]) - t)
         ax.plot(ev_pos[0], ev_pos[1], "x", color="red")
 
         # Limit visible range
