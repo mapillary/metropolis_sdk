@@ -4,3 +4,4 @@ pillow
 pyquaternion
 iopath
 scikit-image
+open3d

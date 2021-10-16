@@ -1,0 +1,416 @@
+#!/usr/bin/env python
+
+import argparse
+import json
+import os
+import struct
+from tokenize import String
+from typing import Dict, List
+
+import numpy as np
+import open3d as o3d
+from pyquaternion import Quaternion
+
+parser = argparse.ArgumentParser(
+    description="""
+This scripts crops camera centric 3D bounding boxes from the big MVS or LiDAR pointclouds.
+These crops are very storage space intensive and redundant, so we do not provide them for download,
+but ask people who need those modalities to perform the crop on their local machine.
+
+These crops can be made from the following Metropolis modalities:
+    - LIDAR_MX2
+    - LIDAR_AERIAL
+    - MVS
+
+example of processing all train and val:
+
+    metropolis_crop_point_clouds --metroplois_root_dir ~/metropolis/ --sensor_string MVS --pointcloud_folder ~/point_clouds/  --set_sequence train val"
+
+example cropping only samples from a list_of_sample_keys:
+
+    metropolis_crop_point_clouds --metroplois_root_dir ~/metropolis/ --sensor_string MVS --pointcloud_folder ~/point_clouds/  --set_sequence train val --list_of_sample_keys ~/point_clouds/list_of_sample_keys.json
+""",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+)
+parser.add_argument(
+    "--metroplois_root_dir",
+    type=str,
+    help="Directory containing the train/val/test folder",
+)
+parser.add_argument(
+    "--sensor_string",
+    type=str,
+    help="Sensor ID from the pointcloud modality used for the crops. \
+                                    Can be one of the following: LIDAR_MX2, LIDAR_AERIAL, MVS",
+)
+parser.add_argument(
+    "--pointcloud_folder",
+    type=str,
+    help="Folder containing the big MVS and LiDAR pointclouds",
+)
+parser.add_argument(
+    "--sample_data_folder",
+    type=str,
+    help="Crops will be put into this folder. By default, it will be put into \
+                                        'sample_data', relative to the Metropolis folder",
+    default="",
+)
+parser.add_argument(
+    "--list_of_sample_keys",
+    type=str,
+    help="Filename of list of sample keys in json format to process, if not specified, all samples will be processed",
+    default="",
+)
+parser.add_argument(
+    "--set_sequence",
+    type=str,
+    nargs="+",
+    help="List of sets to process, e.g.: train, train val",
+    default=["train"],
+)
+parser.add_argument(
+    "--max_nr_to_process",
+    type=int,
+    help="Maximum number of crops per set, default=-1 (unlimited)",
+    default=-1,
+)
+parser.add_argument(
+    "--save_ply", action="store_true", help="if not specified saves *.npz format"
+)
+
+
+def write_point_cloud_np(
+    pointcloud_fn: String,
+    pointcloud_open3d: o3d.geometry.PointCloud,
+    is_compressed: bool = False,
+) -> None:
+    """
+    Write pointcloud to numpy npz file. The pointcloud always has points but can have either:
+    - normals
+    - colors
+    """
+    points = np.array(pointcloud_open3d.points, dtype=np.float32)
+    normals = np.array(pointcloud_open3d.normals, dtype=np.float32)
+    colors = np.array(np.array(pointcloud_open3d.colors) * 256, dtype=np.uint8)
+
+    to_write = {"points": points}
+    if normals.shape[0] > 0:
+        to_write["normals"] = normals
+    if colors.shape[0] > 0:
+        to_write["colors"] = colors
+
+    if is_compressed:
+        np.savez_compressed(pointcloud_fn, **to_write)
+    else:
+        np.savez(pointcloud_fn, **to_write)
+
+
+def point_cloud_to_ply_bin(
+    points: np.ndarray,
+    normals: np.ndarray,
+    colors: np.ndarray,
+    filename: str,
+) -> None:
+    """
+    Write pointcloud to binary ply file. The pointcloud always has points but can have either:
+    - normals
+    - colors
+    """
+    has_normals = normals.shape[0] > 0
+    has_colors = colors.shape[0] > 0
+    with open(filename, "wb") as file:
+        file.write("ply\n".encode("ascii"))
+        file.write("format binary_little_endian 1.0\n".encode("ascii"))
+        file.write("element vertex {}\n".format(len(points)).encode("ascii"))
+        file.write("property float x\n".encode("ascii"))
+        file.write("property float y\n".encode("ascii"))
+        file.write("property float z\n".encode("ascii"))
+
+        if has_normals:
+            file.write("property float nx\n".encode("ascii"))
+            file.write("property float ny\n".encode("ascii"))
+            file.write("property float nz\n".encode("ascii"))
+
+        if has_colors:
+            file.write("property uchar diffuse_red\n".encode("ascii"))
+            file.write("property uchar diffuse_green\n".encode("ascii"))
+            file.write("property uchar diffuse_blue\n".encode("ascii"))
+
+        file.write("end_header\n".encode("ascii"))
+
+        if has_colors and has_normals:
+            for i in range(len(points)):
+                p, n, c = points[i], normals[i], colors[i]
+                binsting = struct.pack(
+                    "ffffffBBB",
+                    p[0],
+                    p[1],
+                    p[2],
+                    n[0],
+                    n[1],
+                    n[2],
+                    int(c[0]),
+                    int(c[1]),
+                    int(c[2]),
+                )
+                file.write(binsting)
+
+        if has_colors and not has_normals:
+            for i in range(len(points)):
+                p, c = points[i], colors[i]
+                binsting = struct.pack(
+                    "fffBBB", p[0], p[1], p[2], int(c[0]), int(c[1]), int(c[2])
+                )
+                file.write(binsting)
+
+        if not has_colors and has_normals:
+            for i in range(len(points)):
+                p, n = points[i], normals[i]
+                binsting = struct.pack("ffffff", p[0], p[1], p[2], n[0], n[1], n[2])
+                file.write(binsting)
+
+        if not has_colors and not has_normals:
+            for i in range(len(points)):
+                p = points[i], normals[i]
+                binsting = struct.pack("fffBBB", p[0], p[1], p[2])
+                file.write(binsting)
+
+
+def transform_bbx(
+    cropin: o3d.visualization.SelectionPolygonVolume, transin: np.ndarray
+) -> o3d.visualization.SelectionPolygonVolume:
+
+    rot_bbx = o3d.geometry.PointCloud.transform(
+        o3d.geometry.PointCloud((cropin.bounding_polygon)), transin
+    )
+    cropo = o3d.visualization.SelectionPolygonVolume()
+    cropo.orthogonal_axis = "Z"
+    cropo.axis_max = 10000
+    cropo.axis_min = -10000
+    cropo.bounding_polygon = o3d.utility.Vector3dVector(np.array(rot_bbx.points))
+    return cropo
+
+
+def get_bbx_poly(bbx_length: float = 120.0) -> np.array:
+
+    xm, ym = 0, 0
+    xmi2, xma2, ymi2, yma2 = (
+        xm - bbx_length,
+        xm + bbx_length,
+        ym - bbx_length,
+        ym + bbx_length,
+    )
+    z0 = 0
+    bbx_poly = np.array(
+        [
+            np.array([xmi2, yma2, z0]),
+            np.array([xma2, yma2, z0]),
+            np.array([xma2, ymi2, z0]),
+            np.array([xmi2, ymi2, z0]),
+        ]
+    )
+    return bbx_poly
+
+
+def get_bbx(bbx_length: float = 120.0) -> o3d.visualization.SelectionPolygonVolume:
+    # get a BBX of (bbx_length)^3
+
+    bbx_poly = get_bbx_poly(bbx_length)
+    bbx_crop = o3d.visualization.SelectionPolygonVolume()
+    bbx_crop.orthogonal_axis = (
+        "Z"  # in the camera cordinate system, Y is down, Z forward, X to the right
+    )
+    bbx_crop.axis_max = bbx_length
+    bbx_crop.axis_min = -bbx_length
+    bbx_crop.bounding_polygon = o3d.utility.Vector3dVector(bbx_poly)
+
+    return bbx_crop
+
+
+def tokenize_list_of_dict(list_of_dicts: List) -> Dict:
+    return_dict = {}
+    for litem in list_of_dicts:
+        return_dict[litem["token"]] = litem
+
+    return return_dict
+
+
+def write_point_cloud(
+    pointcloud_fn: String, pointcloud_open3d: o3d.geometry.PointCloud
+):
+
+    points = np.array(pointcloud_open3d.points, dtype=np.float32)
+    normals = np.array(pointcloud_open3d.normals, dtype=np.float32)
+    colors = np.array(np.array(pointcloud_open3d.colors) * 256, dtype=np.uint8)
+    point_cloud_to_ply_bin(points, normals, colors, pointcloud_fn)
+
+
+########################################################################################################################################################
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+
+    pointcloud_folder = args.pointcloud_folder
+    metropolis_folder = args.metroplois_root_dir
+    sensor_string = args.sensor_string
+    sample_data_folder = args.sample_data_folder
+    max_nr_to_process = args.max_nr_to_process
+    list_of_sample_keys_fn = args.list_of_sample_keys
+    save_ply = args.save_ply
+
+    if not sample_data_folder:
+        sample_data_folder = os.path.join(metropolis_folder, "sample_data/")
+
+    if list_of_sample_keys_fn:
+        with open(list_of_sample_keys_fn) as f:
+            list_of_sample_keys = json.load(f)
+    else:
+        list_of_sample_keys = []
+
+    mvs_filename = pointcloud_folder + "mvs.ply"
+    lidar_filename = pointcloud_folder + "lidar-mx2.ply"
+    aerial_filename = pointcloud_folder + "lidar-aerial.ply"
+
+    bbx_length = 120.0
+    search_radius = (
+        np.sqrt(2) * 120.0
+    )  # np.sqrt(2)*120.0, fit a box in a sphere for kdtree search
+    # search_radius = 50.0
+
+    set_sequence = args.set_sequence
+    # set_sequence = ['train', 'val']
+
+    ###################################
+    # Flags
+    ###################################
+
+    crop_in_kd_tree = True
+    do_microalign_to_lidar = True
+    is_compressed = False  # only has effect if you save a s numpy
+    save_as_numpy = False
+
+    ###################################
+
+    if sensor_string == "MVS":
+        lidar_mod_str = "-mvs"
+        pointcloud = o3d.io.read_point_cloud(mvs_filename)
+        pointcloud_folder_bbx = os.path.join(sample_data_folder, "MVS/")
+        if not os.path.exists(pointcloud_folder_bbx):
+            os.makedirs(pointcloud_folder_bbx)
+
+    if sensor_string == "LIDAR_MX2":
+        lidar_mod_str = "-lidar-mx2"
+        pointcloud = o3d.io.read_point_cloud(lidar_filename)
+        pointcloud_folder_bbx = os.path.join(sample_data_folder, "LIDAR_MX2/")
+        if not os.path.exists(pointcloud_folder_bbx):
+            os.makedirs(pointcloud_folder_bbx)
+
+    if sensor_string == "LIDAR_AERIAL":
+        lidar_mod_str = "-lidar-aerial"
+        pointcloud = o3d.io.read_point_cloud(aerial_filename)
+        pointcloud_folder_bbx = os.path.join(sample_data_folder, "LIDAR_AERIAL/")
+        if not os.path.exists(pointcloud_folder_bbx):
+            os.makedirs(pointcloud_folder_bbx)
+
+    if crop_in_kd_tree:
+        pointcloud_tree = o3d.geometry.KDTreeFlann(pointcloud)
+
+    # loop through the different sets, eg.: ['train', 'val']
+    for set_select in set_sequence:
+        metropolis_select_folder = metropolis_folder + set_select + "/"
+
+        if sensor_string == "MVS":
+            # MVS doesnt need microalignment, but we need the dictionairy keys as a guidance in the MVS case
+            lidar_trans_dict_selected_fn = (
+                pointcloud_folder + set_select + "_lidar-aerial_mtrans_dict.json"
+            )
+        else:
+            # LiDAR needs microalignment
+            lidar_trans_dict_selected_fn = (
+                pointcloud_folder
+                + set_select
+                + "_"
+                + lidar_mod_str[1:]
+                + "_mtrans_dict.json"
+            )
+
+        ego_pose_fn = metropolis_select_folder + "ego_pose.json"
+        with open(ego_pose_fn) as f:
+            ego_pose = json.load(f)
+        ego_pose_dict = tokenize_list_of_dict(ego_pose)
+        sample_fn = metropolis_select_folder + "sample.json"
+
+        with open(lidar_trans_dict_selected_fn) as f:
+            lidar_trans_dict_selected = json.load(f)
+
+        # loop through all the samples in the selected set
+        for nr, (token, micro_trans) in enumerate(lidar_trans_dict_selected.items()):
+
+            # check if max_nr_to_process if defined
+            if nr > max_nr_to_process and max_nr_to_process > 0:
+                break
+            # if there is a list_of_sample_keys list, check if key is in there, otherwise skip sample
+            if (token not in list_of_sample_keys) and len(list_of_sample_keys):
+                break
+            print(
+                "cropping sample nr.",
+                nr,
+                "from",
+                len(lidar_trans_dict_selected),
+                set_select,
+                "samples",
+            )
+
+            # get transformations between camera coordinate system and MVS pointcloud coordinate system
+            ego_item = ego_pose_dict[token + "-egopose"]
+            cam_to_mvs = np.eye(4)
+            cam_to_mvs[:3, :3] = Quaternion(ego_item["rotation"]).rotation_matrix
+            cam_to_mvs[:3, 3] = np.array(ego_item["translation"])
+            mvs_to_cam = np.linalg.inv(cam_to_mvs)
+
+            # calculate camera positions in MVS space
+            tvec = mvs_to_cam[:3, 3]
+            rmat = mvs_to_cam[:3, :3]
+            _rmat_t = -rmat.T
+            cam_pos_in_mvs_space = np.dot(_rmat_t, tvec[0:3])
+
+            if crop_in_kd_tree:
+                _, idx, _ = pointcloud_tree.search_radius_vector_3d(
+                    cam_pos_in_mvs_space, search_radius
+                )
+                pointcloud_slice = pointcloud.select_by_index(idx)
+
+            bbx_base = get_bbx(bbx_length)
+            if crop_in_kd_tree:
+                lidar_bg_cropped_ccs = o3d.geometry.PointCloud.transform(
+                    pointcloud_slice, mvs_to_cam
+                )
+                lidar_bg_cropped_ccs = bbx_base.crop_point_cloud(
+                    lidar_bg_cropped_ccs
+                )  # needs another crop to get a bbx from sphere
+            else:
+                bbx_crop_in_mvs_space = transform_bbx(bbx_base, cam_to_mvs)
+                lidar_cropped = bbx_crop_in_mvs_space.crop_point_cloud(pointcloud)
+                lidar_bg_cropped_ccs = o3d.geometry.PointCloud.transform(
+                    lidar_cropped, mvs_to_cam
+                )
+
+            lidar_trans = np.array(micro_trans)
+            # MVS doesn't need microalignment
+            if do_microalign_to_lidar and not sensor_string == "MVS":
+                lidar_bg_cropped_ccs.transform(lidar_trans)
+
+            if save_ply:
+                source_cropped_lid_fn = (
+                    pointcloud_folder_bbx + token + lidar_mod_str + ".ply"
+                )
+                write_point_cloud(source_cropped_lid_fn, lidar_bg_cropped_ccs)
+            else:
+                source_cropped_lid_fn = (
+                    pointcloud_folder_bbx + token + lidar_mod_str + ".npz"
+                )
+                write_point_cloud_np(
+                    source_cropped_lid_fn,
+                    lidar_bg_cropped_ccs,
+                    is_compressed=is_compressed,
+                )

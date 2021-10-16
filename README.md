@@ -14,11 +14,11 @@ common queries on the data.
 
 The Mapillary Metropolis SDK can be installed directly using pip:
 ```bash
-pip install git+https://github.com/mapillary/metropolis.git
+pip install git+https://github.com/mapillary/metropolis_sdk.git
 ```
 or from source:
 ```bash
-git clone https://github.com/mapillary/metropolis.git
+git clone https://github.com/mapillary/metropolis_sdk.git
 cd metropolis
 pip install -r requirements.txt
 python setup.py install
@@ -29,6 +29,69 @@ images. The easiest way to do this is with Anaconda:
 ```bash
 conda install -c conda-forge gdal
 ```
+
+### Preparing the point cloud data
+
+We distribute our point cloud data as three PLY files, each containing the full extent
+of one data modality (lidar, multi-view stereo etc.). The SDK, however, assumes that
+the point clouds are stored as separate "crop" files, each containing a local slice
+of the full point cloud centered around a specific spatial location. The advantages
+of this format are two-fold:
+
+1. Local point cloud data is much easier and faster to access.
+2. The slices can be micro-aligned with each other, providing a more accurate local
+    representation of the scene.
+
+However, the slice-based representation is extremely redundant and storage-intensive,
+so we give the users full control on which slices to generate. This is achieved with
+the `metropolis_crop_point_clouds` script:
+
+```bash
+$ crop_point_clouds --help
+usage: metropolis_crop_point_clouds
+    [-h] [--metroplois_root_dir METROPLOIS_ROOT_DIR]
+    [--sensor_string SENSOR_STRING]
+    [--pointcloud_folder POINTCLOUD_FOLDER]
+    [--sample_data_folder SAMPLE_DATA_FOLDER]
+    [--list_of_sample_keys LIST_OF_SAMPLE_KEYS]
+    [--set_sequence SET_SEQUENCE [SET_SEQUENCE ...]]
+    [--max_nr_to_process MAX_NR_TO_PROCESS] [--save_ply]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --metroplois_root_dir METROPLOIS_ROOT_DIR
+                        Directory containing the train/val/test folder
+  --sensor_string SENSOR_STRING
+                        Sensor ID from the pointcloud modality used for the
+                        crops. Can be one of the following: LIDAR_MX2,
+                        LIDAR_AERIAL, MVS
+  --pointcloud_folder POINTCLOUD_FOLDER
+                        Folder containing the big MVS and LiDAR pointclouds
+  --sample_data_folder SAMPLE_DATA_FOLDER
+                        Crops will be put into this folder. By default, it
+                        will be put into 'sample_data', relative to the
+                        Metropolis folder
+  --list_of_sample_keys LIST_OF_SAMPLE_KEYS
+                        Filename of list of sample keys in json format to
+                        process, if not specified, all samples will be
+                        processed
+  --set_sequence SET_SEQUENCE [SET_SEQUENCE ...]
+                        List of sets to process, e.g.: train, train val
+  --max_nr_to_process MAX_NR_TO_PROCESS
+                        Maximum number of crops per set, default=-1
+                        (unlimited)
+  --save_ply            if not specified saves *.npz format
+```
+
+Assuming that the Metropolis dataset is in `~/metropolis` and the point clouds have
+been unpacked in `~/metropolis/point_clouds`, we can generate all the slices for the
+`MVS` modality with:
+```bash
+$ metropolis_crop_point_clouds --metroplois_root_dir ~/metropolis --sensor_string MVS --pointcloud_folder ~/metropolis/point_clouds  --set_sequence train val
+```
+
+**Note:** this process will take a few hours to complete, and require several terabytes
+of storage space if all slices are to be generated.
 
 ## Getting started with the Metropolis SDK
 
