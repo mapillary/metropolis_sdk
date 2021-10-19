@@ -999,7 +999,9 @@ class Metropolis:
 
         return pano_record, pano
 
-    def render_panoptic(self, sample_data_token: str, out_path: str) -> None:
+    def render_panoptic(
+        self, sample_data_token: str, out_path: Optional[str] = None
+    ) -> Image.Image:
         """Overlay an image with the corresponding panoptic segmentation
 
         Since panoptic masks are originally computed on the equirectangular images,
@@ -1010,6 +1012,9 @@ class Metropolis:
         Args:
             sample_data_token: Sample_data token of the image.
             out_path: Path to save the rendered figure to disk.
+
+        Returns:
+            The rendered image as a PIL Image
         """
         # Load the image
         with pathmgr.open(
@@ -1053,6 +1058,9 @@ class Metropolis:
         # Render and save
         out = Image.blend(img, pano_color, 0.5).convert(mode="RGBA")
         out = Image.alpha_composite(out, contours_img)
+        out = out.convert(mode="RGB")
 
-        with pathmgr.open(out_path, "wb") as fid:
-            out.convert(mode="RGB").save(fid)
+        if out_path is not None:
+            with pathmgr.open(out_path, "wb") as fid:
+                out.save(fid)
+        return out

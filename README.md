@@ -143,6 +143,8 @@ metropolis.render_pointcloud_in_image(
 )
 ```
 
+For more usage examples, refer to [demo.ipynb](demo.ipynb).
+
 ### Data format
 
 The Mapillary Metropolis data format is mostly compatible with the NuScenes format
