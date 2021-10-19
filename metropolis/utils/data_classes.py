@@ -21,7 +21,6 @@ from .geometry_utils import view_points, view_points_eq, transform_matrix, split
 
 if TYPE_CHECKING:
     from ..metropolis import Metropolis
-from io import BytesIO
 
 EYE3 = np.eye(3)
 EYE4 = np.eye(4)
@@ -367,21 +366,21 @@ class Box:
         assert type(orientation) == Quaternion
 
         self.center = np.array(center)
-        self.wlh = np.array(size)
+        self.lwh = np.array(size)
         self.orientation = orientation
         self.name = name
         self.token = token
 
     def __eq__(self, other):
         center = np.allclose(self.center, other.center)
-        wlh = np.allclose(self.wlh, other.wlh)
+        lwh = np.allclose(self.lwh, other.lwh)
         orientation = np.allclose(self.orientation.elements, other.orientation.elements)
 
-        return center and wlh and orientation
+        return center and lwh and orientation
 
     def __repr__(self):
         repr_str = (
-            "xyz: [{:.2f}, {:.2f}, {:.2f}], wlh: [{:.2f}, {:.2f}, {:.2f}], "
+            "xyz: [{:.2f}, {:.2f}, {:.2f}], lwh: [{:.2f}, {:.2f}, {:.2f}], "
             "rot axis: [{:.2f}, {:.2f}, {:.2f}], ang(degrees): {:.2f}, ang(rad): {:.2f}, "
             "name: {}, token: {}"
         )
@@ -390,9 +389,9 @@ class Box:
             self.center[0],
             self.center[1],
             self.center[2],
-            self.wlh[0],
-            self.wlh[1],
-            self.wlh[2],
+            self.lwh[0],
+            self.lwh[1],
+            self.lwh[2],
             self.orientation.axis[0],
             self.orientation.axis[1],
             self.orientation.axis[2],
@@ -428,21 +427,21 @@ class Box:
         self.center = np.dot(quaternion.rotation_matrix, self.center)
         self.orientation = quaternion * self.orientation
 
-    def corners(self, wlh_factor: float = 1.0) -> np.ndarray:
+    def corners(self, lwh_factor: float = 1.0) -> np.ndarray:
         """Returns the bounding box corners.
 
         Args:
-            wlh_factor: Multiply w, l, h by a factor to scale the box.
+            lwh_factor: Multiply l, w, h by a factor to scale the box.
 
         Returns:
             First four corners are the ones facing forward. The last four are the
             ones facing backwards.
         """
-        w, l, h = self.wlh * wlh_factor
+        l, w, h = self.lwh * lwh_factor
 
-        # 3D bounding box corners. (Convention: x points forward, y to the left, z up.)
-        x_corners = l / 2 * np.array([1, 1, 1, 1, -1, -1, -1, -1])
-        y_corners = w / 2 * np.array([1, -1, -1, 1, 1, -1, -1, 1])
+        # 3D bounding box corners. (Convention: x points right, y to the front, z up.)
+        y_corners = l / 2 * np.array([1, 1, 1, 1, -1, -1, -1, -1])
+        x_corners = w / 2 * np.array([-1, 1, 1, -1, -1, 1, 1, -1])
         z_corners = h / 2 * np.array([1, 1, -1, -1, 1, 1, -1, -1])
         corners = np.vstack((x_corners, y_corners, z_corners))
 

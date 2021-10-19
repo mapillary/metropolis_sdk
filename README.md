@@ -147,8 +147,9 @@ metropolis.render_pointcloud_in_image(
 
 The Mapillary Metropolis data format is mostly compatible with the NuScenes format
 described [here](https://www.nuscenes.org/nuscenes#data-format). For a full
-description of our changes and additions, as well as the coordinate systems used in
-Metropolis and their transformations, please refer to [this document](FORMAT.md).
+description of our changes and additions, the coordinate systems used in
+Metropolis and their transformations, as well as the sensor data we are distributing,
+please refer to [FORMAT.md](FORMAT.md) and [SENSORS.md](SENSORS.md).
 
 ## License
 The Mapillary Metropolis SDK is Apache 2.0 licensed, as found in the LICENSE file.

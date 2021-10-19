@@ -26,8 +26,7 @@ The dataset's folder structure is as follows:
     │   ...
     ├── aerial/
     ├── panoptic/
-    ├── samples/
-    └── sweeps/
+    └── sample_data/
 
 where `train`, `test`, and `val` contain separate database tables for the dataset
 splits, while the remaining folders contain the data files for the whole dataset.
@@ -35,73 +34,10 @@ splits, while the remaining folders contain the data files for the whole dataset
 __Note__: while this data format is strongly influenced by [NuScenes](https://www.nuscenes.org/nuscenes#data-format),
 we __do not__ guarantee full compatibility with it.
 
-## Coordinate systems and conventions
-
-We define four main categories of coordinate systems:
-
-* __World coordinates__: this is a fixed frame, anchored to a specific position
-    in the 3D world which is shared across the whole dataset. X, Y world coordinates
-    can be directly translated to geo-referenced EPSG:6498 coordinates by adding a
-    specific offset vector stored in `aerial.json`.
-* __Vehicle coordinates__: this is a moving frame, anchored to the vehicle that
-    captured the sensor data. The X, Y and Z axes point right, forward and up,
-    respectively. Vehicle coordinates are stored in `ego_pose.json`.
-* __Sensor coordinates__: these are sensor-specific moving frames, anchored to the
-    vehicle that captured the sensor data, but generally different from the vehicle
-    coordinates. Transformations between sensor coordinates and vehicle coordinates
-    are stored in `calibrated_sensor.json`.
-    * For cameras, the sensor coordinate system follows the "OpenCV" convention,
-        i.e. X, Y and Z point right, bottom and forward, respectively.
-    * For point clouds, there's no general convention. The user should always
-        interpret the stored point cloud files in the context of their specific
-        sensor frame defined in `calibrated_sensor.json`.
-* __Object coordinates__: these are object specific frames, used to represent 3D
-    bounding box annotations, stored in `sample_annotation.json`. Each bounding box
-    is defined by its corners `[±W/2, ±L/2, ±H/2]` in object coordinates, where W, L
-    and H are the box's dimensions.
-
-### Coordinate transformations
-
-Transformations between coordinate systems are given as quaternion-vector pairs ![f1],
-and always represent the transformation from the local frame to a more global frame
-i.e. from object to world, from sensor to vehicle, from vehicle to world.
-
-Given a roto-translation ![f1] from frame `A` to frame `B`, we can transform points in
-`A` coordinates ![f2] to points in `B` coordinates ![f3] as:
-
-![f4]
-
-where the rotation matrix ![f5] for a quaternion ![f6] is given by:
-
-![f7]
-
-![f8]
-![f9]
-
-where ![f10] is the bottom-right `R x C` sub-matrix of `M`.
-
-[f1]: https://chart.apis.google.com/chart?cht=tx&chl=(q%2C%20t)
-[f2]: https://chart.apis.google.com/chart?cht=tx&chl=p%5EA
-[f3]: https://chart.apis.google.com/chart?cht=tx&chl=p%5EB
-[f4]: https://chart.apis.google.com/chart?cht=tx&chl=p%5EB%20%3D%20R(q)%20p%5EA%20%2B%20t
-[f5]: https://chart.apis.google.com/chart?cht=tx&chl=R(q)
-[f6]: https://chart.apis.google.com/chart?cht=tx&chl=q%3D(w%2C%20x%2C%20y%2C%20z)
-[f7]: https://chart.apis.google.com/chart?cht=tx&chl=R(q)%3D%5Ctext%7BBR%7D_%7B3%5Ctimes%203%7D%5BQ(q)%5Cbar%7BQ%7D(q)%5E%5Ctop%5D%2C
-[f8]: https://chart.apis.google.com/chart?cht=tx&chl=Q(q)%3D%5Cleft%5B%5Cbegin%7Bmatrix%7Dw%26-x%26-y%26-z%5C%5Cx%26w%26-z%26y%5C%5Cy%26z%26w%26-x%5C%5Cz%26-y%26x%26w%5C%5C%5Cend%7Bmatrix%7D%5Cright%5D%2C%5Cquad
-[f9]: https://chart.apis.google.com/chart?cht=tx&chl=%5Cbar%7BQ%7D(q)%3D%5Cleft%5B%5Cbegin%7Bmatrix%7Dw%26-x%26-y%26-z%5C%5Cx%26w%26z%26-y%5C%5Cy%26-z%26w%26x%5C%5Cz%26y%26-x%26w%5C%5C%5Cend%7Bmatrix%7D%5Cright%5D%2C
-[f10]: https://chart.apis.google.com/chart?cht=tx&chl=%5Ctext%7BBR%7D_%7BR%5Ctimes%20C%7D(M)
+__Note__: for a full description of the coordinate system conventions used in
+Metropolis, please refer to [SENSORS.md](SENSORS.md).
 
 ## Database schema
-
-### aerial.json
-Information about the aerial data and the world coordinate.
-```python
-{
-    "offset": List[float],  # Offset in X, Y from world coordinates to geo-referenced coordinates
-    "srs": str,             # Name of the geo-referenced coordinate system
-    "filename": str,        # Path to the aerial data file, relative to root
-}
-```
 
 ### attribute.json
 Definitions of the attributes sample annotations can possess.
@@ -131,8 +67,9 @@ Semantic categories.
 ```python
 {
     "token": str,
-    "name": str,        # Name of this category
-    "description": str, # Text description of this category
+    "name": str,            # Name of this category
+    "description": str,     # Text description of this category
+    "has_instances": bool,  # Whether this category can have instances (i.e. is a "thing" category)
 }
 ```
 
@@ -145,6 +82,21 @@ the vehicle frame to the world frame.
     "rotation": List[float],    # Rotation quaternion [q_w, q_x, q_y, q_z]
     "translation": List[float], # Translation vector [t_x, t_y, t_z]
     "timestamp": int,           # Timestamp in Unix time
+}
+```
+
+### geo.json
+Meta data about the geo-referenced coordinate systems and the aerial images.
+```python
+{
+    "reference": {
+        "lat": float,       # Reference latitude used to convert from cartesian coordinates to geo-referenced coordinates
+        "lon": float,       # Reference longitude used to convert from cartesian coordinates to geo-referenced coordinates
+        "alt": float,       # Reference altitude used to convert from cartesian coordinates to geo-referenced coordinates
+    },
+    "aerial": {
+        "filename": str,    # Path to the aerial data file
+    }
 }
 ```
 
@@ -185,6 +137,30 @@ Meta-data for the machine-generated panoptic masks. Note that:
 }
 ```
 
+### points.json
+Point-based annotations, i.e. human-annotated image-to-image correspondences. Each
+annotation spans multiple images (within a scene), and has a corresponding 3D point
+in world coordinates. Note that:
+* The 3D points have been determined by cross-referencing the images with the CAD
+    models, which only represent a rough representation of the environment. Because
+    of this, these 3D points generally do not exactly reproject to their corresponding
+    2D points in the images.
+* As for `sample_annotation_2d.json`, the points are annotated on the 360-images.
+```python
+{
+    "token": str,
+    "scene_token": str,                 # Foreign key to the scene this annotation belongs to
+    "point_3d": List[float],            # 3D position in world coordinates [x, y, z]
+    "annotations": [                    # List of image points annotated to be in correspondence
+        {
+            "sample_token": str,        # Foreign key to a sample
+            "point_2d": List[float],    # Position of the point in pixels as [x, y]
+        },
+        ...
+    ]
+}
+```
+
 ### sample.json
 Samples, i.e. collections of sensor recordings captured at a specific location in
 time and space. These are grouped into sequential "scenes" (see `scene.json`).
@@ -210,7 +186,7 @@ with `Metropolis.get_boxes(..., get_all_visible=True)`.
     "token": str,
     "rotation": List[float],    # Rotation quaternion [q_w, q_x, q_y, q_z]
     "translation": List[float], # Translation vector [t_x, t_y, t_z]
-    "size": List[float],        # Bounding box size [w, l, h], i.e. its extent along the Y, X and Z axes, respectively
+    "size": List[float],        # Bounding box size [l, w, h], i.e. its extent along the Y, X and Z axes of the object frame
     "instance_token": str,      # Foreign key to the instance this annotation belongs to
     "sample_token": str,        # Foreign key to the sample where this object is annotated
 }
