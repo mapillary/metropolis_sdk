@@ -643,9 +643,6 @@ class Metropolis:
         # Get sensor modality.
         sd_record = self.get("sample_data", sample_data_token)
 
-        if not sd_record["has_3d"]:
-            raise ValueError("Error: no 3D data available!")
-
         sensor_modality = sd_record["sensor_modality"]
 
         if sensor_modality == "lidar" or sensor_modality == "mvs":
