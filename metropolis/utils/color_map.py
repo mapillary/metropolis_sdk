@@ -1,3 +1,5 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+
 from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
