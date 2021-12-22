@@ -1,8 +1,8 @@
 # Mapillary Metropolis SDK
 
 This SDK is intended as a collection of examples to get you started with understanding
-the Mapillary Metropolis dataset, e.g. by visualizing annotations or performing
-common queries on the data.
+the [Mapillary Metropolis](https://www.mapillary.com/dataset/metropolis) dataset,
+e.g. by visualizing annotations or performing common queries on the data.
 
 ## Overview
 - [Setting up the Metropolis SDK](#setting-up-the-metropolis-sdk)
