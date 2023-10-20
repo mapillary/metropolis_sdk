@@ -1040,7 +1040,7 @@ class Metropolis:
 
         # Highlight the edges between instances
         is_stuff = np.array(
-            [it is None for it in pano_record["instance_tokens"]], dtype=np.bool
+            [it is None for it in pano_record["instance_tokens"]], dtype=bool
         )
         pano[is_stuff[pano]] = 0
 
