@@ -191,6 +191,7 @@ def transform_matrix(
     tm = np.eye(4)
 
     if inverse:
+        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
         rot_inv = rotation.rotation_matrix.T
         trans = np.transpose(-np.array(translation))
         tm[:3, :3] = rot_inv
@@ -219,6 +220,7 @@ def points_in_box(
     Returns:
         A boolean array with the check result for each point.
     """
+    # pyre-fixme[28]: Unexpected keyword argument `wlh_factor`.
     corners = box.corners(wlh_factor=wlh_factor)
 
     p1 = corners[:, 0]

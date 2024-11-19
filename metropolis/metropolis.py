@@ -333,6 +333,7 @@ class Metropolis:
         selected_2d_anntokens: Optional[List[str]] = None,
         use_flat_vehicle_coordinates: bool = False,
         get_all_visible_boxes: bool = False,
+    # pyre-fixme[11]: Annotation `array` is not defined as a type.
     ) -> Tuple[
         str,
         List[Box],
@@ -415,6 +416,10 @@ class Metropolis:
 
             # For perspective camera-like sensors, check if the box is visible
             if is_camera_like and sensor_record["channel"] != "CAM_EQUIRECTANGULAR":
+                # pyre-fixme[6]: For 2nd argument expected `ndarray[Any, Any]` but
+                #  got `Optional[ndarray[Any, dtype[Any]]]`.
+                # pyre-fixme[6]: For 3rd argument expected `Tuple[int, int]` but got
+                #  `Optional[Tuple[Any, Any]]`.
                 if not box_in_image(box, cam_intrinsic, imsize):
                     continue
 
@@ -451,6 +456,8 @@ class Metropolis:
                             box_2d,
                             Quaternion(cs_eq_record["rotation"]),
                             Quaternion(cs_record["rotation"]),
+                            # pyre-fixme[6]: For 4th argument expected `ndarray[Any,
+                            #  Any]` but got `Optional[ndarray[Any, dtype[Any]]]`.
                             cam_intrinsic,
                             (sd_eq_record["width"], sd_eq_record["height"]),
                             (sd_record["width"], sd_record["height"]),
@@ -464,6 +471,7 @@ class Metropolis:
     def render_pointcloud_in_image(
         self,
         sample_token: str,
+        # pyre-fixme[9]: dot_size has type `int`; used as `float`.
         dot_size: int = 0.5,
         downsample: int = 20,
         pointsensor_channel: str = "MVS",

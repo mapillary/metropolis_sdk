@@ -102,6 +102,7 @@ class PointCloud(ABC):
             (cls.nbr_dims(), 0),
             dtype=np.float32 if cls == LidarPointCloud else np.float64,
         )
+        # pyre-fixme[45]: Cannot instantiate abstract class `PointCloud`.
         all_pc = cls(points)
         all_times = np.zeros((1, 0))
 
@@ -356,13 +357,16 @@ class Box:
         center: List[float],
         size: List[float],
         orientation: Quaternion,
+        # pyre-fixme[9]: name has type `str`; used as `None`.
         name: str = None,
+        # pyre-fixme[9]: token has type `str`; used as `None`.
         token: str = None,
     ):
         assert not np.any(np.isnan(center))
         assert not np.any(np.isnan(size))
         assert len(center) == 3
         assert len(size) == 3
+        # pyre-fixme[16]: `type` has no attribute `__eq__`.
         assert type(orientation) == Quaternion
 
         self.center = np.array(center)
@@ -424,7 +428,9 @@ class Box:
         Args:
             quaternion: Rotation to apply.
         """
+        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
         self.center = np.dot(quaternion.rotation_matrix, self.center)
+        # pyre-fixme[16]: `Quaternion` has no attribute `__mul__`.
         self.orientation = quaternion * self.orientation
 
     def corners(self, lwh_factor: float = 1.0) -> np.ndarray:
@@ -437,6 +443,7 @@ class Box:
             First four corners are the ones facing forward. The last four are the
             ones facing backwards.
         """
+        # pyre-fixme[23]: Unable to unpack `float` into 3 values.
         l, w, h = self.lwh * lwh_factor
 
         # 3D bounding box corners. (Convention: x points right, y to the front, z up.)
@@ -583,7 +590,9 @@ class Box2d:
     def __init__(
         self,
         coords: List[float],
+        # pyre-fixme[9]: name has type `str`; used as `None`.
         name: str = None,
+        # pyre-fixme[9]: token has type `str`; used as `None`.
         token: str = None,
     ):
         assert not np.any(np.isnan(coords))
