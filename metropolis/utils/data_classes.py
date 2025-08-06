@@ -375,14 +375,14 @@ class Box:
         self.name = name
         self.token = token
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         center = np.allclose(self.center, other.center)
         lwh = np.allclose(self.lwh, other.lwh)
         orientation = np.allclose(self.orientation.elements, other.orientation.elements)
 
         return center and lwh and orientation
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr_str = (
             "xyz: [{:.2f}, {:.2f}, {:.2f}], lwh: [{:.2f}, {:.2f}, {:.2f}], "
             "rot axis: [{:.2f}, {:.2f}, {:.2f}], ang(degrees): {:.2f}, ang(rad): {:.2f}, "
