@@ -366,8 +366,7 @@ class Box:
         assert not np.any(np.isnan(size))
         assert len(center) == 3
         assert len(size) == 3
-        # pyre-fixme[16]: `type` has no attribute `__eq__`.
-        assert type(orientation) == Quaternion
+        assert isinstance(orientation, Quaternion)
 
         self.center = np.array(center)
         self.lwh = np.array(size)
@@ -428,10 +427,8 @@ class Box:
         Args:
             quaternion: Rotation to apply.
         """
-        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
-        self.center = np.dot(quaternion.rotation_matrix, self.center)
-        # pyre-fixme[16]: `Quaternion` has no attribute `__mul__`.
-        self.orientation = quaternion * self.orientation
+        self.center = np.dot(quaternion.rotation_matrix, self.center)  # type: ignore[attr-defined]
+        self.orientation = quaternion * self.orientation  # type: ignore[attr-defined]
 
     def corners(self, lwh_factor: float = 1.0) -> np.ndarray:
         """Returns the bounding box corners.
