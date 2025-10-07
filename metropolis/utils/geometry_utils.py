@@ -197,6 +197,7 @@ def transform_matrix(
         tm[:3, :3] = rot_inv
         tm[:3, 3] = rot_inv.dot(trans)
     else:
+        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
         tm[:3, :3] = rotation.rotation_matrix
         tm[:3, 3] = np.transpose(np.array(translation))
 
