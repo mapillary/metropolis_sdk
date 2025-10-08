@@ -191,14 +191,20 @@ def transform_matrix(
     tm = np.eye(4)
 
     if inverse:
-        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
-        rot_inv = rotation.rotation_matrix.T
+        rotation_matrix = getattr(rotation, 'rotation_matrix', None)
+        if rotation_matrix is not None:
+            rot_inv = rotation_matrix.T
+        else:
+            raise AttributeError("Quaternion object does not have rotation_matrix attribute")
         trans = np.transpose(-np.array(translation))
         tm[:3, :3] = rot_inv
         tm[:3, 3] = rot_inv.dot(trans)
     else:
-        # pyre-fixme[16]: `Quaternion` has no attribute `rotation_matrix`.
-        tm[:3, :3] = rotation.rotation_matrix
+        rotation_matrix = getattr(rotation, 'rotation_matrix', None)
+        if rotation_matrix is not None:
+            tm[:3, :3] = rotation_matrix
+        else:
+            raise AttributeError("Quaternion object does not have rotation_matrix attribute")
         tm[:3, 3] = np.transpose(np.array(translation))
 
     return tm
