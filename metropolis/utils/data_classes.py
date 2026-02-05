@@ -1,5 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
+# pyre-unsafe
+
 # Original copyright notice:
 # nuScenes dev-kit.
 # Code written by Oscar Beijbom, 2018.

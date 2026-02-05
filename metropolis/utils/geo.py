@@ -1,5 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
+# pyre-unsafe
+
 # This code originally from https://github.com/mapillary/OpenSfM/blob/main/opensfm/geo.py
 import numpy as np
 
