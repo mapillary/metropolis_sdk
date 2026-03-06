@@ -335,12 +335,11 @@ class Metropolis:
         selected_2d_anntokens: Optional[List[str]] = None,
         use_flat_vehicle_coordinates: bool = False,
         get_all_visible_boxes: bool = False,
-    # pyre-fixme[11]: Annotation `array` is not defined as a type.
     ) -> Tuple[
         str,
         List[Box],
         Optional[Union[List[Box2d], List[EquiBox2d]]],
-        Optional[np.array],
+        Optional[np.ndarray],  # pyre-ignore[24]
     ]:
         """Returns the data path as well as all annotations related to that sample_data.
 
@@ -757,11 +756,11 @@ class Metropolis:
                         box.render_eq(ax, data.size, colors=(c, c, c))
                     else:
                         box.render(
-                            ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)
+                            ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)  # pyre-ignore[6]
                         )
             else:
-                for box in boxes_2d:
-                    c = np.array(self.get_color(box.name)) / 255.0
+                for box in boxes_2d:  # pyre-ignore[16]
+                    c = np.array(self.get_color(box.name)) / 255.0  # pyre-ignore[6]
                     if isinstance(box, Box2d):
                         box.render(ax, sd_record["width"], color=c, linewidth=1)
                     else:
@@ -824,9 +823,9 @@ class Metropolis:
 
         # Create coordinates converter
         converter = TopocentricConverter(
-            self.geo["reference"]["lat"],
-            self.geo["reference"]["lon"],
-            self.geo["reference"]["alt"],
+            self.geo["reference"]["lat"],  # pyre-ignore[6]
+            self.geo["reference"]["lon"],  # pyre-ignore[6]
+            self.geo["reference"]["alt"],  # pyre-ignore[6]
         )
 
         # Transform to global coordinates
@@ -865,9 +864,9 @@ class Metropolis:
         )
 
         # Take a crop of the aerial data
-        crop = gdal.Warp(
+        crop = gdal.Warp(  # pyre-ignore[16]
             "",
-            path.join(self.dataroot, self.geo["aerial"]["filename"]),
+            path.join(self.dataroot, self.geo["aerial"]["filename"]),  # pyre-ignore[6]
             dstSRS="WGS84",
             format="VRT",
             outputBounds=(x0_lla, y0_lla, x1_lla, y1_lla),

@@ -162,7 +162,7 @@ class PointCloud(ABC):
                 np.dot,
                 [ref_from_car, car_from_global, global_from_car, car_from_current],
             )
-            current_pc.transform(trans_matrix)
+            current_pc.transform(trans_matrix)  # pyre-ignore[6]
 
             # Add time vector which can be used as a temporal feature.
             time_lag = (
