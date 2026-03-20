@@ -1,13 +1,12 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-unsafe
-
-from typing import Dict, Tuple
+# pyre-strict
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
-def get_colormap() -> Dict[str, Tuple[int, int, int]]:
+def get_colormap() -> dict[str, tuple[int, int, int]]:
     """Get the defined colormap.
 
     Returns:
@@ -108,7 +107,7 @@ def get_colormap() -> Dict[str, Tuple[int, int, int]]:
     return classname_to_color
 
 
-def plot_deph_normalized_colormap(depth_map, scale_range):
+def plot_deph_normalized_colormap(depth_map: np.ndarray, scale_range: float) -> np.ndarray:
     # depth=0 is the area with no depth data, will be colorized as far away background
     depth_map[depth_map <= 0] = 255
     # the color map wil be spread within 0 - scale_range
