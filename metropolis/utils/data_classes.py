@@ -1,6 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-unsafe
+# pyre-strict
+
+from __future__ import annotations
 
 # Original copyright notice:
 # nuScenes dev-kit.
@@ -10,7 +12,7 @@ import copy
 import os.path as osp
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import Tuple, List, Dict, TYPE_CHECKING, Any, Optional
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:matplotlib
@@ -41,7 +43,7 @@ class PointCloud(ABC):
         points: d-dimensional input point cloud matrix.
     """
 
-    def __init__(self, points: np.ndarray):
+    def __init__(self, points: np.ndarray) -> None:
         assert (
             points.shape[0] == self.nbr_dims()
         ), f"Error: Pointcloud points must have format: {self.nbr_dims()} x n"
@@ -58,7 +60,7 @@ class PointCloud(ABC):
 
     @classmethod
     @abstractmethod
-    def from_file(cls, file_name: str) -> "PointCloud":
+    def from_file(cls, file_name: str) -> PointCloud:
         """Loads point cloud from disk.
 
         Args:
@@ -72,13 +74,13 @@ class PointCloud(ABC):
     @classmethod
     def from_file_multisweep(
         cls,
-        metr: "Metropolis",
-        sample_rec: Dict[str, Any],
+        metr: Metropolis,
+        sample_rec: dict[str, Any],
         chan: str,
         ref_chan: str,
         nsweeps: int = 5,
         min_distance: float = 1.0,
-    ) -> Tuple["PointCloud", np.ndarray]:
+    ) -> tuple[PointCloud, np.ndarray]:
         """Return a point cloud that aggregates multiple sweeps.
 
         As every sweep is in a different coordinate frame, we need to map the
@@ -104,8 +106,7 @@ class PointCloud(ABC):
             (cls.nbr_dims(), 0),
             dtype=np.float32 if cls == LidarPointCloud else np.float64,
         )
-        # pyre-fixme[45]: Cannot instantiate abstract class `PointCloud`.
-        all_pc = cls(points)
+        all_pc = cls(points)  # pyre-ignore[45]
         all_times = np.zeros((1, 0))
 
         # Get reference pose and timestamp.
@@ -246,8 +247,8 @@ class PointCloud(ABC):
         self,
         ax: Axes,
         view: np.ndarray = EYE4,
-        x_lim: Tuple[float, float] = (-20, 20),
-        y_lim: Tuple[float, float] = (-20, 20),
+        x_lim: tuple[float, float] = (-20, 20),
+        y_lim: tuple[float, float] = (-20, 20),
         marker_size: float = 1,
     ) -> None:
         """Very simple method that applies a transformation and then scatter plots
@@ -266,8 +267,8 @@ class PointCloud(ABC):
         self,
         ax: Axes,
         view: np.ndarray = EYE4,
-        x_lim: Tuple[float, float] = (-20, 20),
-        y_lim: Tuple[float, float] = (-20, 20),
+        x_lim: tuple[float, float] = (-20, 20),
+        y_lim: tuple[float, float] = (-20, 20),
         marker_size: float = 1,
     ) -> None:
         """Very simple method that applies a transformation and then scatter plots
@@ -287,8 +288,8 @@ class PointCloud(ABC):
         color_channel: int,
         ax: Axes,
         view: np.ndarray,
-        x_lim: Tuple[float, float],
-        y_lim: Tuple[float, float],
+        x_lim: tuple[float, float],
+        y_lim: tuple[float, float],
         marker_size: float,
     ) -> None:
         """Helper function for rendering.
@@ -320,7 +321,7 @@ class LidarPointCloud(PointCloud):
         return 4
 
     @classmethod
-    def from_file(cls, file_name: str) -> "LidarPointCloud":
+    def from_file(cls, file_name: str) -> LidarPointCloud:
         """Loads LIDAR data from binary numpy format. Data is stored as (x, y, z,
         intensity, ring index).
 
@@ -356,14 +357,12 @@ class Box:
 
     def __init__(
         self,
-        center: List[float],
-        size: List[float],
+        center: list[float],
+        size: list[float],
         orientation: Quaternion,
-        # pyre-fixme[9]: name has type `str`; used as `None`.
-        name: str = None,
-        # pyre-fixme[9]: token has type `str`; used as `None`.
-        token: str = None,
-    ):
+        name: str | None = None,
+        token: str | None = None,
+    ) -> None:
         assert not np.any(np.isnan(center))
         assert not np.any(np.isnan(size))
         assert len(center) == 3
@@ -376,12 +375,14 @@ class Box:
         self.name = name
         self.token = token
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Box):
+            return NotImplemented
         center = np.allclose(self.center, other.center)
         lwh = np.allclose(self.lwh, other.lwh)
         orientation = np.allclose(self.orientation.elements, other.orientation.elements)
 
-        return center and lwh and orientation
+        return bool(center and lwh and orientation)
 
     def __repr__(self) -> str:
         repr_str = (
@@ -442,8 +443,8 @@ class Box:
             First four corners are the ones facing forward. The last four are the
             ones facing backwards.
         """
-        # pyre-fixme[23]: Unable to unpack `float` into 3 values.
-        l, w, h = self.lwh * lwh_factor
+        lwh_scaled = self.lwh * lwh_factor
+        l, w, h = lwh_scaled[0], lwh_scaled[1], lwh_scaled[2]
 
         # 3D bounding box corners. (Convention: x points right, y to the front, z up.)
         y_corners = l / 2 * np.array([1, 1, 1, 1, -1, -1, -1, -1])
@@ -475,7 +476,7 @@ class Box:
         axis: Axes,
         view: np.ndarray = EYE3,
         normalize: bool = False,
-        colors: Tuple[Any, Any, Any] = ("b", "r", "k"),
+        colors: tuple[Any, Any, Any] = ("b", "r", "k"),
         linewidth: float = 2,
     ) -> None:
         """Renders the box in the provided Matplotlib axis.
@@ -490,7 +491,7 @@ class Box:
         """
         corners = view_points(self.corners(), view, normalize=normalize)[:2, :]
 
-        def draw_rect(selected_corners, color):
+        def draw_rect(selected_corners: np.ndarray, color: Any) -> None:
             prev = selected_corners[-1]
             for corner in selected_corners:
                 axis.plot(
@@ -527,8 +528,8 @@ class Box:
     def render_eq(
         self,
         axis: Axes,
-        img_size: Tuple[int, int],
-        colors: Tuple[Any, Any, Any] = ("b", "r", "k"),
+        img_size: tuple[int, int],
+        colors: tuple[Any, Any, Any] = ("b", "r", "k"),
         linewidth: float = 2,
         num_samples: int = 20,
     ) -> None:
@@ -546,7 +547,7 @@ class Box:
         t = np.linspace(0, 1, num_samples).reshape(1, -1)
         corners = self.corners()
 
-        def draw_line(p1, p2, color):
+        def draw_line(p1: np.ndarray, p2: np.ndarray, color: Any) -> None:
             line = p1.reshape(3, -1) + t * (p2 - p1).reshape(3, -1)
             line = view_points_eq(line, img_size[0], img_size[1])
 
@@ -563,7 +564,7 @@ class Box:
         for i in range(4):
             draw_line(corners[:, i % 4 + 4], corners[:, (i + 1) % 4 + 4], colors[1])
 
-    def copy(self) -> "Box":
+    def copy(self) -> Box:
         """Create a copy of self.
 
         Returns:
@@ -588,12 +589,10 @@ class Box2d:
 
     def __init__(
         self,
-        coords: List[float],
-        # pyre-fixme[9]: name has type `str`; used as `None`.
-        name: str = None,
-        # pyre-fixme[9]: token has type `str`; used as `None`.
-        token: str = None,
-    ):
+        coords: list[float],
+        name: str | None = None,
+        token: str | None = None,
+    ) -> None:
         assert not np.any(np.isnan(coords))
         assert len(coords) == 4
 
@@ -601,8 +600,10 @@ class Box2d:
         self.name = name
         self.token = token
 
-    def __eq__(self, other) -> bool:
-        return np.allclose(self.coords, other.coords)
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Box2d):
+            return NotImplemented
+        return bool(np.allclose(self.coords, other.coords))
 
     def __repr__(self) -> str:
         return "[{:.2f}, {:.2f}, {:.2f}, {:.2f}], name={}, token={}".format(
@@ -658,9 +659,9 @@ class EquiBox2d:
     def __init__(
         self,
         points: np.ndarray,
-        name: Optional[str] = None,
-        token: Optional[str] = None,
-    ):
+        name: str | None = None,
+        token: str | None = None,
+    ) -> None:
         assert points.shape[0] == 2
 
         self.points = points
@@ -685,10 +686,10 @@ class EquiBox2d:
         q_eq: Quaternion,
         q_pr: Quaternion,
         intrinsic: np.ndarray,
-        size_eq: Tuple[int, int],
-        size_pr: Tuple[int, int],
+        size_eq: tuple[int, int],
+        size_pr: tuple[int, int],
         num_samples: int = 20,
-    ) -> Optional["EquiBox2d"]:
+    ) -> EquiBox2d | None:
         """Project an equirectangular bounding box to a projective image
 
         This assumes that both cameras have the same center, being related by a
@@ -713,7 +714,7 @@ class EquiBox2d:
             of the projective image.
         """
 
-        def get_points(x0, y0, x1, y1):
+        def get_points(x0: float, y0: float, x1: float, y1: float) -> np.ndarray:
             side1 = np.stack(
                 [
                     np.linspace(x0, x1, num_samples, dtype=np.float32),
@@ -744,7 +745,7 @@ class EquiBox2d:
             )
             return np.concatenate([side1, side2, side3, side4], axis=1)
 
-        def project(points):
+        def project(points: np.ndarray) -> np.ndarray:
             # From pixel coordinates to angles
             u = (points[0] / size_eq[0] - 0.5) * 2 * np.pi
             v = (points[1] / size_eq[1] - 0.5) * np.pi

@@ -11,6 +11,8 @@ import time
 from os import path
 from typing import Tuple, List, Optional, Dict, Any, Union
 
+from pyre_extensions import none_throws
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:matplotlib
@@ -718,7 +720,7 @@ class Metropolis:
 
             # Show boxes.
             for box in boxes:
-                c = np.array(self.get_color(box.name)) / 255.0
+                c = np.array(self.get_color(none_throws(box.name))) / 255.0
                 box.render(ax, view=np.eye(4), colors=(c, c, c))
 
             # Limit visible range.
@@ -751,7 +753,7 @@ class Metropolis:
             # Show boxes.
             if show_3d_boxes:
                 for box in boxes:
-                    c = np.array(self.get_color(box.name)) / 255.0
+                    c = np.array(self.get_color(none_throws(box.name))) / 255.0
                     if sd_record["channel"] == "CAM_EQUIRECTANGULAR":
                         box.render_eq(ax, data.size, colors=(c, c, c))
                     else:
