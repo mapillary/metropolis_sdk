@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-unsafe
+# pyre-strict
 
 # Original copyright notice:
 # nuScenes dev-kit.
@@ -98,7 +98,9 @@ class Metropolis:
         self.sample_data = self.__load_table__("sample_data")
         self.sample_annotation = self.__load_table__("sample_annotation")
         self.sample_annotation_2d = self.__load_table__("sample_annotation_2d")
-        self.geo = self.__load_table__("geo")
+
+        with pathmgr.open(path.join(self.table_root, "geo.json")) as f:
+            self.geo: Dict[str, Any] = json.load(f)
 
         # Initialize the colormap which maps from class names to RGB values.
         self.colormap = get_colormap()
@@ -419,10 +421,8 @@ class Metropolis:
 
             # For perspective camera-like sensors, check if the box is visible
             if is_camera_like and sensor_record["channel"] != "CAM_EQUIRECTANGULAR":
-                # pyre-fixme[6]: For 2nd argument expected `ndarray[Any, Any]` but
-                #  got `Optional[ndarray[Any, dtype[Any]]]`.
-                # pyre-fixme[6]: For 3rd argument expected `Tuple[int, int]` but got
-                #  `Optional[Tuple[Any, Any]]`.
+                assert cam_intrinsic is not None
+                assert imsize is not None
                 if not box_in_image(box, cam_intrinsic, imsize):
                     continue
 
@@ -459,9 +459,7 @@ class Metropolis:
                             box_2d,
                             Quaternion(cs_eq_record["rotation"]),
                             Quaternion(cs_record["rotation"]),
-                            # pyre-fixme[6]: For 4th argument expected `ndarray[Any,
-                            #  Any]` but got `Optional[ndarray[Any, dtype[Any]]]`.
-                            cam_intrinsic,
+                            none_throws(cam_intrinsic),
                             (sd_eq_record["width"], sd_eq_record["height"]),
                             (sd_record["width"], sd_record["height"]),
                         )
@@ -474,15 +472,14 @@ class Metropolis:
     def render_pointcloud_in_image(
         self,
         sample_token: str,
-        # pyre-fixme[9]: dot_size has type `int`; used as `float`.
-        dot_size: int = 0.5,
+        dot_size: float = 0.5,
         downsample: int = 20,
         pointsensor_channel: str = "MVS",
         camera_channel: str = "CAM_FRONT",
         out_path: Optional[str] = None,
         ax: Optional[Axes] = None,
         nsweeps: int = 1,
-    ):
+    ) -> None:
         """Scatter-plots a point-cloud on top of equirectangular image.
 
         Args:
@@ -533,7 +530,7 @@ class Metropolis:
         camera_token: str,
         nsweeps: int = 1,
         min_dist: float = 1.0,
-    ) -> Tuple:
+    ) -> Tuple[np.ndarray, np.ndarray, Image.Image]:
         """Given a point sensor (e.g. lidar / mvs) token and camera sample_data token,
         load point-cloud and map it to an image.
 
@@ -757,12 +754,14 @@ class Metropolis:
                     if sd_record["channel"] == "CAM_EQUIRECTANGULAR":
                         box.render_eq(ax, data.size, colors=(c, c, c))
                     else:
+                        assert camera_intrinsic is not None
                         box.render(
-                            ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)  # pyre-ignore[6]
+                            ax, view=camera_intrinsic, normalize=True, colors=(c, c, c)
                         )
             else:
-                for box in boxes_2d:  # pyre-ignore[16]
-                    c = np.array(self.get_color(box.name)) / 255.0  # pyre-ignore[6]
+                assert boxes_2d is not None
+                for box in boxes_2d:
+                    c = np.array(self.get_color(none_throws(box.name))) / 255.0
                     if isinstance(box, Box2d):
                         box.render(ax, sd_record["width"], color=c, linewidth=1)
                     else:
@@ -825,9 +824,9 @@ class Metropolis:
 
         # Create coordinates converter
         converter = TopocentricConverter(
-            self.geo["reference"]["lat"],  # pyre-ignore[6]
-            self.geo["reference"]["lon"],  # pyre-ignore[6]
-            self.geo["reference"]["alt"],  # pyre-ignore[6]
+            self.geo["reference"]["lat"],
+            self.geo["reference"]["lon"],
+            self.geo["reference"]["alt"],
         )
 
         # Transform to global coordinates
@@ -868,7 +867,7 @@ class Metropolis:
         # Take a crop of the aerial data
         crop = gdal.Warp(  # pyre-ignore[16]
             "",
-            path.join(self.dataroot, self.geo["aerial"]["filename"]),  # pyre-ignore[6]
+            path.join(self.dataroot, self.geo["aerial"]["filename"]),
             dstSRS="WGS84",
             format="VRT",
             outputBounds=(x0_lla, y0_lla, x1_lla, y1_lla),
