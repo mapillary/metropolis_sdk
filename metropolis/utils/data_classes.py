@@ -21,13 +21,13 @@ from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:m
 from pyquaternion import Quaternion
 
 from . import pathmgr
-from .geometry_utils import view_points, view_points_eq, transform_matrix, split_poly_eq
+from .geometry_utils import split_poly_eq, transform_matrix, view_points, view_points_eq
 
 if TYPE_CHECKING:
     from ..metropolis import Metropolis
 
-EYE3 = np.eye(3)
-EYE4 = np.eye(4)
+EYE3: np.ndarray = np.eye(3)
+EYE4: np.ndarray = np.eye(4)
 
 
 class PointCloud(ABC):
@@ -44,9 +44,9 @@ class PointCloud(ABC):
     """
 
     def __init__(self, points: np.ndarray) -> None:
-        assert (
-            points.shape[0] == self.nbr_dims()
-        ), f"Error: Pointcloud points must have format: {self.nbr_dims()} x n"
+        assert points.shape[0] == self.nbr_dims(), (
+            f"Error: Pointcloud points must have format: {self.nbr_dims()} x n"
+        )
         self.points = points
 
     @staticmethod
