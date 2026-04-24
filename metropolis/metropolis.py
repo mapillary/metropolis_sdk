@@ -9,31 +9,31 @@ import json
 import sys
 import time
 from os import path
-from typing import Tuple, List, Optional, Dict, Any, Union
-
-from pyre_extensions import none_throws
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from matplotlib.axes import (  # @manual=fbsource//third-party/pypi/matplotlib:matplotlib
     Axes,
 )
 from PIL import Image
 from pyquaternion import Quaternion
+from pyre_extensions import none_throws
 from skimage.morphology import dilation
 from skimage.segmentation import find_boundaries
 from skimage.transform import warp
 
 from .utils import pathmgr
 from .utils.color_map import get_colormap, plot_deph_normalized_colormap
-from .utils.data_classes import LidarPointCloud, Box, Box2d, EquiBox2d
+from .utils.data_classes import Box, Box2d, EquiBox2d, LidarPointCloud
 from .utils.geo import TopocentricConverter
 from .utils.geometry_utils import (
-    view_points,
-    view_points_eq,
-    transform_matrix,
     box_in_image,
     inverse_map_eq,
+    transform_matrix,
+    view_points,
+    view_points_eq,
 )
 
 # GDAL import is optional
@@ -77,9 +77,9 @@ class Metropolis:
             "sample_annotation_2d",
         ]
 
-        assert pathmgr.exists(
-            self.table_root
-        ), f"Database version not found: {self.table_root}"
+        assert pathmgr.exists(self.table_root), (
+            f"Database version not found: {self.table_root}"
+        )
 
         start_time = time.time()
         if verbose:
@@ -343,7 +343,7 @@ class Metropolis:
         str,
         List[Box],
         Optional[Union[List[Box2d], List[EquiBox2d]]],
-        Optional[np.ndarray],  # pyre-ignore[24]
+        Optional[npt.NDArray[np.float64]],
     ]:
         """Returns the data path as well as all annotations related to that sample_data.
 
@@ -812,9 +812,9 @@ class Metropolis:
         sd_record = self.get("sample_data", sample_data_token)
         sensor_modality = sd_record["sensor_modality"]
 
-        assert (
-            sensor_modality == "lidar" or sensor_modality == "mvs"
-        ), "This function is only available for pointclouds"
+        assert sensor_modality == "lidar" or sensor_modality == "mvs", (
+            "This function is only available for pointclouds"
+        )
 
         # Get the point cloud
         sample_rec = self.get("sample", sd_record["sample_token"])
@@ -947,9 +947,9 @@ class Metropolis:
         """
         # Get the sample data
         sd_record = self.get("sample_data", sample_data_token)
-        assert (
-            sd_record["sensor_modality"] == "camera"
-        ), "Panoptic masks can only be computed for images"
+        assert sd_record["sensor_modality"] == "camera", (
+            "Panoptic masks can only be computed for images"
+        )
 
         # Get the corresponding sample and panoptic records
         sample_record = self.get("sample", sd_record["sample_token"])
