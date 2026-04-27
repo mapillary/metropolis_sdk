@@ -2,7 +2,7 @@
 
 # pyre-strict
 
-import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 
 
@@ -113,7 +113,7 @@ def plot_deph_normalized_colormap(depth_map: np.ndarray, scale_range: float) -> 
     # the color map wil be spread within 0 - scale_range
     depth_map[depth_map > scale_range] = scale_range
     depth_map = depth_map / scale_range
-    cmap = plt.colormaps["jet_r"]
+    cmap = matplotlib.colormaps["jet_r"]
     rgba = cmap(depth_map)
     rgb = rgba[:, :, 0:3] * 255.0
 
