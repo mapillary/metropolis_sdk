@@ -1,13 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-unsafe
+# pyre-strict
 
 # Original copyright notice:
 # nuScenes dev-kit.
 # Code written by Oscar Beijbom and Alex Lang, 2018.
 
 from enum import IntEnum
-from typing import Tuple, TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pyquaternion import Quaternion
@@ -95,7 +95,7 @@ def inverse_map_eq(
     points: np.ndarray,
     transform: np.ndarray,
     intrinsics: np.ndarray,
-    eq_size: Tuple[int, int],
+    eq_size: tuple[int, int],
 ) -> np.ndarray:
     """Inverse map function to warp from perspective to equirect. using scikit-image
 
@@ -134,7 +134,7 @@ def inverse_map_eq(
 def box_in_image(
     box: "Box",
     intrinsic: np.ndarray,
-    imsize: Tuple[int, int],
+    imsize: tuple[int, int],
     vis_level: int = BoxVisibility.ANY,
 ) -> bool:
     """Check if a box is visible inside an image without accounting for occlusions.
@@ -255,7 +255,7 @@ def points_in_box(
     return mask
 
 
-def split_poly_eq(poly: np.ndarray, width: int) -> List[np.ndarray]:
+def split_poly_eq(poly: np.ndarray, width: int) -> list[np.ndarray]:
     """Split a polygon into multiple segments to render it properly on an eq image
 
     When projecting lines (e.g. 3D bounding box edges) to an equirectangular image,
