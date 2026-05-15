@@ -115,6 +115,7 @@ def plot_deph_normalized_colormap(depth_map: np.ndarray, scale_range: float) -> 
     depth_map = depth_map / scale_range
     cmap = matplotlib.colormaps["jet_r"]
     rgba = cmap(depth_map)
+    # pyrefly: ignore [bad-index]
     rgb = rgba[:, :, 0:3] * 255.0
 
     return rgb
