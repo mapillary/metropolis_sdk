@@ -106,7 +106,7 @@ class PointCloud(ABC):
             (cls.nbr_dims(), 0),
             dtype=np.float32 if cls == LidarPointCloud else np.float64,
         )
-        all_pc = cls(points)  # pyre-ignore[45]
+        all_pc = cls(points)
         all_times = np.zeros((1, 0))
 
         # Get reference pose and timestamp.
@@ -163,7 +163,7 @@ class PointCloud(ABC):
                 np.dot,
                 [ref_from_car, car_from_global, global_from_car, car_from_current],
             )
-            current_pc.transform(trans_matrix)  # pyre-ignore[6]
+            current_pc.transform(trans_matrix)
 
             # Add time vector which can be used as a temporal feature.
             time_lag = (
@@ -430,8 +430,8 @@ class Box:
         Args:
             quaternion: Rotation to apply.
         """
-        self.center = np.dot(quaternion.rotation_matrix, self.center)  # type: ignore[attr-defined]
-        self.orientation = quaternion * self.orientation  # type: ignore[attr-defined]
+        self.center = np.dot(quaternion.rotation_matrix, self.center)
+        self.orientation = quaternion * self.orientation
 
     def corners(self, lwh_factor: float = 1.0) -> np.ndarray:
         """Returns the bounding box corners.
