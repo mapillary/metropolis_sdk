@@ -43,6 +43,8 @@ class PointCloud(ABC):
         points: d-dimensional input point cloud matrix.
     """
 
+    points: np.ndarray
+
     def __init__(self, points: np.ndarray) -> None:
         assert points.shape[0] == self.nbr_dims(), (
             f"Error: Pointcloud points must have format: {self.nbr_dims()} x n"
@@ -355,6 +357,12 @@ class Box:
         token: Unique string identifier from DB.
     """
 
+    center: np.ndarray
+    lwh: np.ndarray
+    orientation: Quaternion
+    name: str | None
+    token: str | None
+
     def __init__(
         self,
         center: list[float],
@@ -587,6 +595,10 @@ class Box2d:
         token: Unique string identifier from DB.
     """
 
+    coords: list[float]
+    name: str | None
+    token: str | None
+
     def __init__(
         self,
         coords: list[float],
@@ -655,6 +667,10 @@ class EquiBox2d:
         name: Box name, optional. Can be used e.g. for denote category name.
         token: Unique string identifier from DB.
     """
+
+    points: np.ndarray
+    name: str | None
+    token: str | None
 
     def __init__(
         self,
