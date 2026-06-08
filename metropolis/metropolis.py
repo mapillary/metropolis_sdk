@@ -9,7 +9,7 @@ import json
 import sys
 import time
 from os import path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -100,7 +100,7 @@ class Metropolis:
         self.sample_annotation_2d = self.__load_table__("sample_annotation_2d")
 
         with pathmgr.open(path.join(self.table_root, "geo.json")) as f:
-            self.geo: Dict[str, Any] = json.load(f)
+            self.geo: dict[str, Any] = json.load(f)
 
         # Initialize the colormap which maps from class names to RGB values.
         self.colormap = get_colormap()
@@ -118,7 +118,7 @@ class Metropolis:
         """Returns the folder where the tables are stored for the relevant version."""
         return path.join(self.dataroot, self.split)
 
-    def __load_table__(self, table_name: str) -> List[Dict[str, Any]]:
+    def __load_table__(self, table_name: str) -> list[dict[str, Any]]:
         """Loads a table."""
         with pathmgr.open(path.join(self.table_root, f"{table_name}.json")) as f:
             table = json.load(f)
@@ -191,7 +191,7 @@ class Metropolis:
                 f"Done reverse indexing in {time.time() - start_time:.1f} seconds.\n======"
             )
 
-    def get(self, table_name: str, token: str) -> Dict[str, Any]:
+    def get(self, table_name: str, token: str) -> dict[str, Any]:
         """Returns a record from table in constant runtime.
 
         Args:
@@ -217,7 +217,7 @@ class Metropolis:
         """
         return self._token2ind[table_name][token]
 
-    def field2token(self, table_name: str, field: str, query: Any) -> List[str]:
+    def field2token(self, table_name: str, field: str, query: Any) -> list[str]:
         """This function queries all records for a certain field value, and returns
         the tokens for the matching records.
 
@@ -269,7 +269,7 @@ class Metropolis:
 
     def get_boxes(
         self, sample_data_token: str, get_all_visible: bool = False
-    ) -> List[Box]:
+    ) -> list[Box]:
         """Instantiates Boxes for all annotation for a particular sample_data record
 
         Args:
@@ -303,7 +303,7 @@ class Metropolis:
         else:
             return list(map(self.get_box, curr_sample_record["anns"]))
 
-    def get_boxes_2d(self, sample_data_token: str) -> List[Box2d]:
+    def get_boxes_2d(self, sample_data_token: str) -> list[Box2d]:
         """Instantiates 2D Boxes for all annotation for a particular sample_data record
 
         Args:
@@ -316,7 +316,7 @@ class Metropolis:
         curr_sample_record = self.get("sample", sd_record["sample_token"])
         return list(map(self.get_box_2d, curr_sample_record["anns_2d"]))
 
-    def get_color(self, category_name: str) -> Tuple[int, int, int]:
+    def get_color(self, category_name: str) -> tuple[int, int, int]:
         """Provides the default colors based on the category names.
 
         Args:
@@ -335,15 +335,15 @@ class Metropolis:
     def get_sample_data(
         self,
         sample_data_token: str,
-        selected_anntokens: Optional[List[str]] = None,
-        selected_2d_anntokens: Optional[List[str]] = None,
+        selected_anntokens: list[str] | None = None,
+        selected_2d_anntokens: list[str] | None = None,
         use_flat_vehicle_coordinates: bool = False,
         get_all_visible_boxes: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         str,
-        List[Box],
-        Optional[Union[List[Box2d], List[EquiBox2d]]],
-        Optional[npt.NDArray[np.float64]],
+        list[Box],
+        list[Box2d] | list[EquiBox2d] | None,
+        npt.NDArray[np.float64] | None,
     ]:
         """Returns the data path as well as all annotations related to that sample_data.
 
@@ -476,8 +476,8 @@ class Metropolis:
         downsample: int = 20,
         pointsensor_channel: str = "MVS",
         camera_channel: str = "CAM_FRONT",
-        out_path: Optional[str] = None,
-        ax: Optional[Axes] = None,
+        out_path: str | None = None,
+        ax: Axes | None = None,
         nsweeps: int = 1,
     ) -> None:
         """Scatter-plots a point-cloud on top of equirectangular image.
@@ -530,7 +530,7 @@ class Metropolis:
         camera_token: str,
         nsweeps: int = 1,
         min_dist: float = 1.0,
-    ) -> Tuple[np.ndarray, np.ndarray, Image.Image]:
+    ) -> tuple[np.ndarray, np.ndarray, Image.Image]:
         """Given a point sensor (e.g. lidar / mvs) token and camera sample_data token,
         load point-cloud and map it to an image.
 
@@ -622,9 +622,9 @@ class Metropolis:
         self,
         sample_data_token: str,
         axes_limit: float = 40,
-        ax: Optional[Axes] = None,
+        ax: Axes | None = None,
         nsweeps: int = 1,
-        out_path: Optional[str] = None,
+        out_path: str | None = None,
         use_flat_vehicle_coordinates: bool = True,
         show_3d_boxes: bool = False,
         show_all_visible_3d_boxes: bool = False,
@@ -789,9 +789,9 @@ class Metropolis:
         self,
         sample_data_token: str,
         axes_limit: float = 40,
-        ax: Optional[Axes] = None,
+        ax: Axes | None = None,
         nsweeps: int = 1,
-        out_path: Optional[str] = None,
+        out_path: str | None = None,
         verbose: bool = False,
     ) -> None:
         """Render a view of a point cloud onto an aerial image.
@@ -930,7 +930,7 @@ class Metropolis:
 
     def get_panoptic_mask(
         self, sample_data_token: str
-    ) -> Tuple[Dict[str, Any], np.ndarray]:
+    ) -> tuple[dict[str, Any], np.ndarray]:
         """Get the panoptic mask for a given image
 
         Since panoptic masks are originally computed on the equirectangular images,
@@ -1007,7 +1007,7 @@ class Metropolis:
         return pano_record, pano
 
     def render_panoptic(
-        self, sample_data_token: str, out_path: Optional[str] = None
+        self, sample_data_token: str, out_path: str | None = None
     ) -> Image.Image:
         """Overlay an image with the corresponding panoptic segmentation
 
