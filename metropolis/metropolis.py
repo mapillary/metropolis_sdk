@@ -5,6 +5,8 @@
 # Original copyright notice:
 # nuScenes dev-kit.
 # Code written by Oscar Beijbom, 2018.
+from __future__ import annotations
+
 import json
 import sys
 import time
@@ -58,7 +60,7 @@ class Metropolis:
         dataroot: str,
         verbose: bool = True,
         map_resolution: float = 0.1,
-    ):
+    ) -> None:
         self.split = split
         self.dataroot = dataroot
         self.verbose = verbose
@@ -136,7 +138,7 @@ class Metropolis:
             print("Reverse indexing ...")
 
         # Store the mapping from token to table index for each table.
-        self._token2ind = {}
+        self._token2ind: dict[str, dict[str, int]] = {}
         for table in self.table_names:
             self._token2ind[table] = {}
 
