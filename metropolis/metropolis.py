@@ -877,7 +877,7 @@ class Metropolis:
         img = np.stack(
             [crop.GetRasterBand(i + 1).ReadAsArray() for i in range(3)], axis=-1
         )
-        img = Image.fromarray(img)
+        img = Image.fromarray(np.asarray(img))
 
         # Init axes.
         if ax is None:
