@@ -1,6 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-strict
 
 from __future__ import annotations
 

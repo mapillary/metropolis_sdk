@@ -1,6 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-strict
 
 # Original copyright notice:
 # nuScenes dev-kit.

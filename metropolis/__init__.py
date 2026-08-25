@@ -1,6 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-# pyre-unsafe
 
 from .metropolis import Metropolis  # noqa F401
 
