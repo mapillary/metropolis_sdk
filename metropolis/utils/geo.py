@@ -1,14 +1,25 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import TypeVar
 
 # This code originally from https://github.com/mapillary/OpenSfM/blob/main/opensfm/geo.py
 import numpy as np
+from numpy.typing import NDArray
+
+# These conversions are elementwise: scalar inputs give scalar outputs and array
+# inputs give array outputs.
+_Coord = TypeVar("_Coord", float, NDArray[np.float64])
 
 WGS84_a = 6378137.0
 WGS84_b = 6356752.314245
 
 
-def ecef_from_lla(lat, lon, alt):
+def ecef_from_lla(
+    lat: _Coord, lon: _Coord, alt: _Coord
+) -> tuple[_Coord, _Coord, _Coord]:
     """
     Compute ECEF XYZ from latitude, longitude and altitude.
 
@@ -32,7 +43,7 @@ def ecef_from_lla(lat, lon, alt):
     return x, y, z
 
 
-def lla_from_ecef(x, y, z):
+def lla_from_ecef(x: _Coord, y: _Coord, z: _Coord) -> tuple[_Coord, _Coord, _Coord]:
     """
     Compute latitude, longitude and altitude from ECEF XYZ.
 
@@ -54,7 +65,9 @@ def lla_from_ecef(x, y, z):
     return np.degrees(lat), np.degrees(lon), alt
 
 
-def ecef_from_topocentric_transform(lat, lon, alt):
+def ecef_from_topocentric_transform(
+    lat: float, lon: float, alt: float
+) -> NDArray[np.float64]:
     """
     Transformation from a topocentric frame at reference position to ECEF.
 
@@ -81,7 +94,9 @@ def ecef_from_topocentric_transform(lat, lon, alt):
     )
 
 
-def ecef_from_topocentric_transform_finite_diff(lat, lon, alt):
+def ecef_from_topocentric_transform_finite_diff(
+    lat: float, lon: float, alt: float
+) -> NDArray[np.float64]:
     """
     Transformation from a topocentric frame at reference position to ECEF.
 
@@ -128,7 +143,14 @@ def ecef_from_topocentric_transform_finite_diff(lat, lon, alt):
     )
 
 
-def topocentric_from_lla(lat, lon, alt, reflat, reflon, refalt):
+def topocentric_from_lla(
+    lat: _Coord,
+    lon: _Coord,
+    alt: _Coord,
+    reflat: float,
+    reflon: float,
+    refalt: float,
+) -> tuple[_Coord, _Coord, _Coord]:
     """
     Transform from lat, lon, alt to topocentric XYZ.
 
@@ -149,7 +171,14 @@ def topocentric_from_lla(lat, lon, alt, reflat, reflon, refalt):
     return tx, ty, tz
 
 
-def lla_from_topocentric(x, y, z, reflat, reflon, refalt):
+def lla_from_topocentric(
+    x: _Coord,
+    y: _Coord,
+    z: _Coord,
+    reflat: float,
+    reflon: float,
+    refalt: float,
+) -> tuple[_Coord, _Coord, _Coord]:
     """
     Transform from topocentric XYZ to lat, lon, alt.
     """
@@ -160,7 +189,10 @@ def lla_from_topocentric(x, y, z, reflat, reflon, refalt):
     return lla_from_ecef(ex, ey, ez)
 
 
-def gps_distance(latlon_1, latlon_2):
+def gps_distance(
+    latlon_1: Sequence[float] | NDArray[np.float64],
+    latlon_2: Sequence[float] | NDArray[np.float64],
+) -> float:
     """
     Distance between two (lat,lon) pairs.
 
@@ -180,19 +212,21 @@ def gps_distance(latlon_1, latlon_2):
 class TopocentricConverter:
     """Convert to and from a topocentric reference frame."""
 
-    def __init__(self, reflat, reflon, refalt):
+    def __init__(self, reflat: float, reflon: float, refalt: float) -> None:
         """Init the converter given the reference origin."""
         self.lat = reflat
         self.lon = reflon
         self.alt = refalt
 
-    def to_topocentric(self, lat, lon, alt):
+    def to_topocentric(
+        self, lat: _Coord, lon: _Coord, alt: _Coord
+    ) -> tuple[_Coord, _Coord, _Coord]:
         """Convert lat, lon, alt to topocentric x, y, z."""
         return topocentric_from_lla(lat, lon, alt, self.lat, self.lon, self.alt)
 
-    def to_lla(self, x, y, z):
+    def to_lla(self, x: _Coord, y: _Coord, z: _Coord) -> tuple[_Coord, _Coord, _Coord]:
         """Convert topocentric x, y, z to lat, lon, alt."""
         return lla_from_topocentric(x, y, z, self.lat, self.lon, self.alt)
 
-    def __eq__(self, o):
+    def __eq__(self, o) -> bool:
         return np.allclose([self.lat, self.lon, self.alt], (o.lat, o.lon, o.alt))
