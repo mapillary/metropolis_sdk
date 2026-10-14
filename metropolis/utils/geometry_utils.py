@@ -228,8 +228,7 @@ def points_in_box(
     Returns:
         A boolean array with the check result for each point.
     """
-    # pyre-fixme[28]: Unexpected keyword argument `wlh_factor`.
-    corners = box.corners(wlh_factor=wlh_factor)
+    corners = box.corners(lwh_factor=wlh_factor)
 
     p1 = corners[:, 0]
     p_x = corners[:, 4]

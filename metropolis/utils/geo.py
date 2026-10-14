@@ -228,5 +228,7 @@ class TopocentricConverter:
         """Convert topocentric x, y, z to lat, lon, alt."""
         return lla_from_topocentric(x, y, z, self.lat, self.lon, self.alt)
 
-    def __eq__(self, o) -> bool:
+    def __eq__(self, o: object) -> bool:
+        if not isinstance(o, TopocentricConverter):
+            return NotImplemented
         return np.allclose([self.lat, self.lon, self.alt], (o.lat, o.lon, o.alt))

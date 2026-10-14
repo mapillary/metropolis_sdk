@@ -1,11 +1,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
+from importlib.metadata import PackageNotFoundError, version
 
 from .metropolis import Metropolis  # noqa F401
 
 try:
-    # pyre-fixme[21]: Could not find module
-    #  `mapillary.research.metropolis.metropolis._version`.
-    from ._version import version as __version__  # noqa F401
-except ImportError:
+    __version__: str = version("metropolis_sdk")
+except PackageNotFoundError:
     pass
