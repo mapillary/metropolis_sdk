@@ -2,8 +2,10 @@ import contextlib
 import io
 import json
 import os
+import re
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from typing import Any
 from unittest import mock
 
@@ -11,6 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mapillary.research.metropolis.metropolis import metropolis as metropolis_module
 from mapillary.research.metropolis.metropolis.metropolis import Metropolis
+from mapillary.research.metropolis.metropolis.utils import (
+    data_classes as data_classes_module,
+)
 from mapillary.research.metropolis.metropolis.utils.data_classes import (
     Box2d,
     EquiBox2d,
@@ -419,6 +424,121 @@ class AerialViewTest(MetropolisTestBase):
         self.assertEqual(ax.get_title(), "MVS")
         self.assertEqual(ax.get_xlim(), (0.0, 60.0))
         self.assertTrue(os.path.exists(out_path))
+
+    def test_unreadable_band_raises(self) -> None:
+        gdal = mock.MagicMock()
+        gdal.Warp.return_value.GetRasterBand.return_value.ReadAsArray.return_value = (
+            None
+        )
+        with mock.patch.object(metropolis_module, "gdal", gdal):
+            with self.assertRaisesRegex(RuntimeError, "could not read the aerial"):
+                self.metr.render_aerial_view("sd_mvs")
+
+
+REMOTE_ROOT = "manifold://bucket/tree"
+# With an identity osr transform the view is centered on pixel ~(1000, 1000) and,
+# once padded, spans ~[692, 1311] x [708, 1292]: only the "near" tiles overlap it.
+TILES = {"near1": 500, "near2": 1000, "far1": 0, "far2": 2000}
+SOURCES = "".join(
+    f'<SimpleSource><SourceFilename relativeToVRT="1">tiles/{name}.jpg</SourceFilename>'
+    f'<DstRect xOff="{off}" yOff="{off}" xSize="500" ySize="500"/></SimpleSource>'
+    for name, off in TILES.items()
+)
+AERIAL_VRT = (
+    '<VRTDataset rasterXSize="3000" rasterYSize="3000"><SRS>WGS84</SRS>'
+    "<GeoTransform>10.99, 1e-5, 0, 48.01, 0, -1e-5</GeoTransform>"
+    + f"<VRTRasterBand>{SOURCES}</VRTRasterBand>" * 3
+    + "</VRTDataset>"
+)
+
+
+class RemoteAerialViewTest(MetropolisTestBase):
+    def setUp(self) -> None:
+        super().setUp()
+        os.makedirs(os.path.join(self.root, "aerial", "tiles"))
+        with open(os.path.join(self.root, "aerial", "aerial.vrt"), "w") as f:
+            f.write(AERIAL_VRT)
+        for name in TILES:
+            Image.new("RGB", (8, 8)).save(
+                os.path.join(self.root, "aerial", "tiles", f"{name}.jpg")
+            )
+        self.metr.geo["aerial"]["filename"] = "aerial/aerial.vrt"
+        self.metr.dataroot = REMOTE_ROOT
+
+    def _render(self, gdal: mock.MagicMock) -> tuple[list[str], ET.Element]:
+        """Renders, returning the fetched URIs and the VRT passed to gdal.Warp."""
+
+        def to_local(uri: str) -> str:
+            return uri.replace(REMOTE_ROOT, self.root)
+
+        pathmgr = mock.MagicMock()
+        pathmgr.open.side_effect = lambda uri, mode="r": open(to_local(uri), mode)
+        pathmgr.get_local_path.side_effect = to_local
+        osr = mock.MagicMock()
+        osr.SpatialReference.return_value.SetFromUserInput.return_value = 0
+        osr.CoordinateTransformation.return_value.TransformPoint.side_effect = (
+            lambda x, y: (x, y, 0.0)
+        )
+        crop = mock.MagicMock()
+        crop.GetRasterBand.return_value.ReadAsArray.return_value = np.zeros(
+            (5, 6), dtype=np.uint8
+        )
+        crop.GetGeoTransform.return_value = (11.0, 1e-5, 0.0, 48.0, 0.0, -1e-5)
+        warped: list[ET.Element] = []
+
+        def warp(_: str, vrt: str, **kwargs: Any) -> mock.MagicMock:
+            self.assertNotIn("://", vrt)
+            warped.append(ET.parse(vrt).getroot())  # The temp dir is removed later
+            return crop
+
+        gdal.Warp.side_effect = warp
+        with mock.patch.object(metropolis_module, "gdal", gdal), mock.patch.object(
+            metropolis_module, "osr", osr
+        ), mock.patch.object(metropolis_module, "pathmgr", pathmgr), mock.patch.object(
+            data_classes_module, "pathmgr", pathmgr
+        ):
+            self.metr.render_aerial_view("sd_mvs")
+        return [c.args[0] for c in pathmgr.get_local_path.call_args_list], warped[0]
+
+    def test_only_overlapping_tiles_are_fetched(self) -> None:
+        fetched, vrt = self._render(mock.MagicMock())
+
+        near = [f"aerial/tiles/{name}.jpg" for name in ("near1", "near2")]
+        self.assertEqual(fetched, [f"{REMOTE_ROOT}/{name}" for name in near])
+        filenames = vrt.findall(".//SourceFilename")
+        self.assertEqual(
+            [f.text for f in filenames],
+            [os.path.join(self.root, name) for name in near] * 3,
+        )
+        self.assertEqual({f.get("relativeToVRT") for f in filenames}, {"0"})
+
+    def test_tiles_gdal_cannot_read_are_converted_to_tiff(self) -> None:
+        gdal = mock.MagicMock()
+        gdal.IdentifyDriver.return_value = None
+        _, vrt = self._render(gdal)
+
+        filenames = {f.text or "" for f in vrt.findall(".//SourceFilename")}
+        self.assertEqual(len(filenames), 2)
+        self.assertTrue(all(name.endswith(".tif") for name in filenames))
+
+    def test_sources_without_dst_rect_cover_the_full_raster(self) -> None:
+        with open(os.path.join(self.root, "aerial", "aerial.vrt"), "w") as f:
+            f.write(re.sub(r"<DstRect [^>]*/>", "", AERIAL_VRT))
+        fetched, _ = self._render(mock.MagicMock())
+
+        self.assertEqual(
+            fetched, [f"{REMOTE_ROOT}/aerial/tiles/{name}.jpg" for name in TILES]
+        )
+
+    def test_no_overlapping_tile_raises(self) -> None:
+        # Shifting the origin by 1 degree puts the view ~100k pixels from every tile.
+        with open(os.path.join(self.root, "aerial", "aerial.vrt"), "w") as f:
+            f.write(AERIAL_VRT.replace("10.99,", "9.99,"))
+        gdal = mock.MagicMock()
+
+        with self.assertRaisesRegex(ValueError, "overlaps the requested view"):
+            self._render(gdal)
+        gdal.Warp.assert_not_called()
 
 
 class PanopticTest(MetropolisTestBase):

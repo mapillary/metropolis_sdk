@@ -6,9 +6,13 @@
 # Code written by Oscar Beijbom, 2018.
 from __future__ import annotations
 
+import hashlib
 import json
+import posixpath
 import sys
+import tempfile
 import time
+import xml.etree.ElementTree as ET
 from os import path
 from typing import Any
 
@@ -39,9 +43,10 @@ from .utils.geometry_utils import (
 
 # GDAL import is optional
 try:
-    from osgeo import gdal
+    from osgeo import gdal, osr  # pyrefly: ignore[missing-module-attribute]
 except ModuleNotFoundError:
     gdal = None
+    osr = None
 
 PYTHON_VERSION = sys.version_info[0]
 
@@ -50,6 +55,84 @@ if not PYTHON_VERSION == 3:
 
 
 EYE4 = np.eye(4)
+
+
+def _aerial_pixel_window(
+    vrt: ET.Element, bounds: tuple[float, float, float, float], pad: float = 256
+) -> tuple[float, float, float, float]:
+    """Converts lon/lat bounds to a padded (col0, row0, col1, row1) VRT pixel window."""
+    osr_lib = none_throws(osr)
+    wgs84, vrt_srs = osr_lib.SpatialReference(), osr_lib.SpatialReference()
+    wgs84.SetFromUserInput("WGS84")
+    vrt_srs.SetFromUserInput(none_throws(vrt.findtext("SRS")))
+    for srs in (wgs84, vrt_srs):
+        srs.SetAxisMappingStrategy(osr_lib.OAMS_TRADITIONAL_GIS_ORDER)
+    to_vrt = osr_lib.CoordinateTransformation(wgs84, vrt_srs)
+
+    x0, y0, x1, y1 = bounds
+    corners = np.array(
+        [to_vrt.TransformPoint(x, y)[:2] for x in (x0, x1) for y in (y0, y1)]
+    )
+    gt = [float(v) for v in none_throws(vrt.findtext("GeoTransform")).split(",")]
+    pixels = np.linalg.solve(
+        np.array([[gt[1], gt[2]], [gt[4], gt[5]]]), (corners - [gt[0], gt[3]]).T
+    )
+    (c0, r0), (c1, r1) = pixels.min(axis=1) - pad, pixels.max(axis=1) + pad
+    return c0, r0, c1, r1
+
+
+def _fetch_aerial_tile(remote_path: str, tmp_dir: str) -> str:
+    local_path = pathmgr.get_local_path(remote_path)
+    if none_throws(gdal).IdentifyDriver(local_path) is not None:  # pyrefly: ignore[missing-attribute]
+        return local_path
+    # e.g. GDAL built without the JPEG driver: convert to TIFF, which it can read
+    tiff_name = hashlib.sha256(remote_path.encode()).hexdigest()
+    tiff_path = path.join(tmp_dir, f"{tiff_name}.tif")
+    with Image.open(local_path) as im:
+        im.convert("RGB").save(tiff_path)
+    return tiff_path
+
+
+def _localize_aerial_vrt(
+    remote_vrt: str, bounds: tuple[float, float, float, float], tmp_dir: str
+) -> str:
+    """Writes a local copy of a remote aerial VRT to `tmp_dir`, keeping only the
+    tiles that overlap the lon/lat `bounds` (it references thousands)."""
+    with pathmgr.open(remote_vrt, "r") as f:
+        vrt = ET.fromstring(f.read())
+    c0, r0, c1, r1 = _aerial_pixel_window(vrt, bounds)
+    # A source without DstRect covers the whole raster
+    full_raster = {
+        "xOff": "0",
+        "yOff": "0",
+        "xSize": vrt.attrib["rasterXSize"],
+        "ySize": vrt.attrib["rasterYSize"],
+    }
+
+    local_paths: dict[str, str] = {}
+    for band in vrt.iter("VRTRasterBand"):
+        for source in band.findall("*[SourceFilename]"):
+            dst_rect = source.find("DstRect")
+            rect = full_raster if dst_rect is None else dst_rect.attrib
+            x, y = float(rect["xOff"]), float(rect["yOff"])
+            w, h = float(rect["xSize"]), float(rect["ySize"])
+            if not (x < c1 and x + w > c0 and y < r1 and y + h > r0):
+                band.remove(source)
+                continue
+            filename = none_throws(source.find("SourceFilename"))
+            remote_path = none_throws(filename.text).strip()
+            if filename.get("relativeToVRT") == "1":
+                remote_path = posixpath.join(posixpath.dirname(remote_vrt), remote_path)
+            if remote_path not in local_paths:
+                local_paths[remote_path] = _fetch_aerial_tile(remote_path, tmp_dir)
+            filename.text = local_paths[remote_path]
+            filename.set("relativeToVRT", "0")
+
+    if not local_paths:
+        raise ValueError(f"No tile of {remote_vrt} overlaps the requested view")
+    local_vrt = path.join(tmp_dir, "aerial.vrt")
+    ET.ElementTree(vrt).write(local_vrt)
+    return local_vrt
 
 
 class Metropolis:
@@ -866,17 +949,25 @@ class Metropolis:
         )
 
         # Take a crop of the aerial data
-        crop = gdal.Warp(  # pyre-ignore[16]
-            "",
-            path.join(self.dataroot, self.geo["aerial"]["filename"]),
-            dstSRS="WGS84",
-            format="VRT",
-            outputBounds=(x0_lla, y0_lla, x1_lla, y1_lla),
-        )
-        img = np.stack(
-            [crop.GetRasterBand(i + 1).ReadAsArray() for i in range(3)], axis=-1
-        )
-        img = Image.fromarray(np.asarray(img))
+        aerial_path = path.join(self.dataroot, self.geo["aerial"]["filename"])
+        bounds = (x0_lla, y0_lla, x1_lla, y1_lla)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            if "://" in self.dataroot:
+                # GDAL can't open pathmgr URIs: crop a local copy of the nearby tiles
+                aerial_path = _localize_aerial_vrt(aerial_path, bounds, tmp_dir)
+            gdal_lib = none_throws(gdal)
+            crop = gdal_lib.Warp(  # pyrefly: ignore[missing-attribute]
+                "", aerial_path, dstSRS="WGS84", format="VRT", outputBounds=bounds
+            )
+            bands = [] if crop is None else [
+                crop.GetRasterBand(i + 1).ReadAsArray() for i in range(3)
+            ]
+            if not bands or any(band is None for band in bands):
+                raise RuntimeError(
+                    f"GDAL could not read the aerial image {aerial_path}: "
+                    f"{gdal_lib.GetLastErrorMsg()}"  # pyrefly: ignore[missing-attribute]
+                )
+        img = Image.fromarray(np.stack(bands, axis=-1))
 
         # Init axes.
         if ax is None:

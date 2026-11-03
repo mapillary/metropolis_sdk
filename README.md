@@ -30,6 +30,9 @@ images. The easiest way to do this is with Anaconda:
 conda install -c conda-forge gdal
 ```
 
+`render_aerial_view` also works when the dataroot is a remote `PathManager` URI: only
+the aerial tiles around the rendered view are downloaded.
+
 ### Preparing the point cloud data
 
 We distribute our point cloud data as three PLY files, each containing the full extent
